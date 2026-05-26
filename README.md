@@ -21,3 +21,4 @@ Das Projekt basiert historisch auf den großartigen Vorarbeiten der Open-Source-
 3. **Taupunkt-Steuerung (2025/2026):** Kompletter Umbau der Messstrecke, Sensorik und Regelung von DK6WT.
 
 Note: This project is currently a work in progress (WIP)! 
+**Disclaimer:** This is a private open-source project. Code is provided "as is" without any warranty, guarantees, or official support.
