@@ -19,3 +19,5 @@ Das Projekt basiert historisch auf den großartigen Vorarbeiten der Open-Source-
 1. **Initial-Version (2013-2015):** Multi-Display SWR-Meter von *Loftur E. Jonasson (TF3LJ)*.
 2. **Display- & Touch-Umbau (2017-2021):** Anpassung an RA8875/GSL1680 von *J.G. Holstein*.
 3. **Taupunkt-Steuerung (2025/2026):** Kompletter Umbau der Messstrecke, Sensorik und Regelung von DK6WT.
+
+Note: This project is currently a work in progress (WIP)! 
