@@ -2,7 +2,7 @@
 
 **High-precision chilled mirror dew point controller for Teensy 4.1, ADS1263, BMP585 and RA8875 touch display under GNU GPLv3.**
 
-Dieses Projekt beinhaltet die komplette Software zur Steuerung eines hochpräzisen Taupunktspiegels. Die Basis des Codes wurde optimiert für maximale Stabilität, schonende Auslastung des SPI- und I2C-Busses und eine ruhige Messwertanzeige.
+Dieses Projekt beinhaltet die komplette Software zur Steuerung eines hochpräzisen Taupunktspiegels. Die Basis des Codes wurde optimiert für maximale Stabilität, schonende Auslastung des SPI- und I2C-Busses und eine ruhige und präziese Messwertanzeige.
 
 ## Features
 * **Leistungsstarke Hardware:** Optimiert für den Teensy 4.1 mit 600 MHz.
