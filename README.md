@@ -6,7 +6,7 @@ Dieses Projekt beinhaltet die komplette Software zur Steuerung eines hochpräzis
 
 ## Features
 * **Leistungsstarke Hardware:** Optimiert für den Teensy 4.1 mit 600 MHz.
-* **Präzise Sensorik:** Direkte Einlesung des ADS1263 und BMP585 Luftdrucksensors über den I2C2-Bus.
+* **Präzise Sensorik:** Direkte Einlesung des ADS1263 und BMP585 Luftdrucksensors über den SPI bzw. I2C2-Bus.
 * **Geglättete Messwerte:** Integrierter Ringpuffer im Regelungskreis für ein absolut stabiles Signal ohne Flackern.
 * **Hochpräzise Berechnung:** Mathematische Berechnung des Sättigungsdampfdrucks nach der Sonntag-Formel (1990) inklusive Real-Gas-Korrektur (WMO f-Faktor) in `double`-Präzision.
 * **Schonende RTC-Abfrage:** Die externe Echtzeit-Uhr (RV-3129) synchronisiert sich stressfrei nur alle 15 Minuten mit der internen Teensy-Uhr. Das verhindert Störungen des Quarzes und sorgt für eine perfekt gehende Uhrzeit.
