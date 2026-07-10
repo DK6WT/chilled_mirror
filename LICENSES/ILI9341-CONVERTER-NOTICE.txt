@@ -1,0 +1,45 @@
+ILI9341_t3 font-format and conversion notice
+
+Historical upstream conversion route
+------------------------------------
+Tool:
+  bdf_to_ili9341.c
+  Purpose: convert BDF font data to the packed ILI9341_t3 font-table format
+  Copyright: 2015 Paul Stoffregen
+  Upstream: https://github.com/PaulStoffregen/ILI9341_t3/tree/master/extras
+  License: GNU General Public License version 3 or later
+
+Historical wrapper command:
+  otf2bdf -p <size> <font.ttf> | ./bdf_to_ili9341
+
+Pre-converter:
+  otf2bdf
+  Purpose: convert OpenType/TrueType outline fonts to BDF
+  License: MIT
+
+This route is recorded only as historical background. TP-3000 does not
+redistribute executable copies of these converters, and current generated font
+data does not depend on their output.
+
+Current TP-3000 generators
+--------------------------
+Files:
+  tools/font_provenance/generate_droidsansmono.py
+  tools/font_provenance/generate_fontawesome_f080_40.py
+
+License:
+  GPL-3.0-only
+
+Purpose:
+  Independently rasterize the required glyphs from the verified AOSP Droid Sans
+  Mono and official Font Awesome 4.5.0 TTF files and emit
+  ILI9341_t3_font_t-compatible packed C representations.
+
+The project-local generators implement the packed output themselves and do not
+read or copy historical ILI9341_fonts C tables. Generated Droid Sans Mono data
+remains under Apache-2.0; generated Font Awesome data remains under SIL Open
+Font License 1.1. The generators' GPL license does not replace those font-data
+licenses.
+
+The complete GPL version 3, MIT, Apache-2.0 and OFL-1.1 texts are supplied in
+LICENSES/ or the corresponding bundled component folders.

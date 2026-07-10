@@ -1,0 +1,84 @@
+TP-3000 EARTH IMAGE NOTICE
+==========================
+
+Files
+-----
+- earth.c
+- assets/earth_blue_marble_ai_800x480.png
+
+Final TP-3000 image
+-------------------
+The image included in this package is AI-generated artwork created for the
+TP-3000 project with OpenAI image generation on 2026-06-14. The generated output
+was resized to 800 x 480 pixels and converted to RGB565 for earth.c.
+
+The resulting image is not an original NASA image. It was not reviewed,
+approved or endorsed by NASA. It contains no NASA insignia, logotype or seal.
+
+AI output provenance
+--------------------
+OpenAI Europe Terms of Use state that, as between the user and OpenAI and to the
+extent permitted by applicable law, the user owns the Output and OpenAI assigns
+its rights, if any, in that Output to the user. AI output may not be unique and
+users remain responsible for its use.
+
+Terms source:
+https://openai.com/policies/eu-terms-of-use/
+
+To the extent copyright or related rights exist, the GPL-3.0-only designation
+applies to the TP-3000-specific source representation, selection, processing,
+resizing, RGB565 conversion and integration, and to any protectable original
+elements of the generated image.
+
+NASA source material is not relicensed by this notice and remains subject to
+NASA's applicable media usage guidelines. Public-domain elements, where
+applicable, remain public domain.
+
+NASA source material / visual reference
+---------------------------------------
+NASA Earth Observatory:
+The Blue Marble (2002): True-color global imagery at 1km resolution
+Western Hemisphere
+
+Source:
+https://science.nasa.gov/earth/earth-observatory/the-blue-marble-true-color-global-imagery-at-1km-resolution/
+
+Credits of the NASA source material
+-----------------------------------
+- NASA Goddard Space Flight Center
+- Image by Reto Stöckli (land surface, shallow water, clouds)
+- Enhancements by Robert Simmon (ocean color, compositing, 3D globes, animation)
+- Data and technical support: MODIS Land Group; MODIS Science Data Support Team;
+  MODIS Atmosphere Group; MODIS Ocean Group
+- Additional data: USGS EROS Data Center (topography); USGS Terrestrial Remote
+  Sensing Flagstaff Field Center (Antarctica); Defense Meteorological Satellite
+  Program (city lights)
+
+NASA usage information
+----------------------
+NASA states on the Blue Marble page that the source images are freely available
+to educators, scientists, museums and the public. NASA's Images and Media Usage
+Guidelines state that NASA content generally is not subject to copyright in the
+United States, require attention to separately identified third-party content,
+request acknowledgement of NASA as source material and prohibit implying NASA
+endorsement of commercial goods or services.
+
+For AI applications NASA additionally encourages marking products as
+AI-generated, attributing the output to the AI product rather than NASA, and
+using NASA references only as factual source disclosure without implying NASA
+review or permission.
+
+Usage-guidelines source:
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+Required project wording
+------------------------
+This TP-3000 image is AI-generated with OpenAI image generation. NASA Earth
+Observatory's Blue Marble (2002) Western Hemisphere image was used as source
+material / visual reference. NASA did not review, approve or endorse the
+TP-3000 image or product.
+
+Checksums
+---------
+PNG SHA-256: bf5044d5b65629b0413efc9fe09e8b62ac408bc5b674b9cb37626331b44e73b6
+earth.c SHA-256: 4f7b90e2b18c192c9ae3b47ce960d0ed223b34d26c0bdd01a4609a4acd60e32f

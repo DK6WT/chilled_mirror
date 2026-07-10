@@ -1,69 +1,40 @@
-# Prerequisites
-*.d
+# IDE and operating-system files
+.theia/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
+# Arduino / Teensy build output
 build/
-Build/
-build-*/
-
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
-
-# Temporary files
-*.tmp
-*.log
-*.bak
-*.swp
-
-# vcpkg
-vcpkg_installed/
-
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
+out/
 .cache/
+*.o
+*.d
+*.a
+*.elf
+*.hex
+*.bin
+*.map
+
+# Python verification artifacts
+__pycache__/
+*.py[cod]
+
+# Temporary and editor files
+*.tmp
+*.bak
+*.orig
+*.rej
+*~
+*.db
+
+# Measurement and log data
+*.csv
+*.log
+
+# Local archives; publish release ZIPs as GitHub release assets instead
+*.zip
+
+# Panel-specific GSL1680 firmware is obtained directly from the display vendor
+external/GSL1680/gslX680_311_5_F.h

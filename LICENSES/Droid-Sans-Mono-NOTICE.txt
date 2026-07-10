@@ -1,0 +1,62 @@
+Droid Sans Mono font notice
+
+TP-3000 generated data file:
+  fonts_droidsansmono_data.c
+
+Font family:
+  Droid Sans Mono, Regular
+  Designer: Steve Matteson
+  Original publisher/source: Google / Android Open Source Project
+  License: Apache License 2.0
+
+Exact source included in TP-3000:
+  third_party/font_sources/DroidSansMono-AOSP.ttf
+  Size: 108128 bytes
+  Git blob ID: b7bf5b4aa8ad5a8c8036653734d83006c6a376ee
+  SHA-256: db19a1fdaba41cc4a2fec0330e5c15e71c6dd68a3ef074f4f28268828b45c862
+
+Independent generation:
+  tools/font_provenance/generate_droidsansmono.py
+
+The generator verifies the source hash and creates all 18 TP-3000 sizes at
+100 dpi with monochrome FreeType rasterization. It writes the packed glyph
+data, index tables and ILI9341_t3_font_t-compatible descriptors itself. It does
+not read or copy the historical ILI9341_fonts C tables.
+
+Generated ranges:
+  0x20-0x7E  ASCII
+  0xB0-0xBE  TP-3000 extended range
+
+Extended range:
+  B0 degree sign
+  B1 Greek capital omega / ohm
+  B2 ä
+  B3 ö
+  B4 ü
+  B5 small percent sign
+  B6 Ä
+  B7 Ö
+  B8 Ü
+  B9 ß
+  BA µ
+  BB ±
+  BC Δ
+  BD ≤
+  BE ≥
+
+The small percent sign is derived in each generator run from the freshly
+rasterized U+0025 glyph. It is area-resampled to 75%, centered in the same
+monospaced cell and aligned to the same baseline. No earlier small-percent
+bitmap is copied.
+
+The generated font-derived data remains under Apache License 2.0. The
+surrounding TP-3000 program is GPL-3.0-only without removing or replacing the
+Apache-2.0 terms for this font data.
+
+Full license text:
+  Apache-2.0.txt
+
+Additional provenance:
+  third_party/font_sources/AOSP-NOTICE.txt
+  third_party/font_sources/README.md
+  tools/font_provenance/README.md

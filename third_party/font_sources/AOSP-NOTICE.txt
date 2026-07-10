@@ -1,0 +1,21 @@
+Droid Sans Mono source-font notice
+
+Source project:
+  Android Open Source Project (AOSP)
+  platform/frameworks/base/data/fonts/DroidSansMono.ttf
+
+Copyright:
+  Copyright (c) 2005-2008, The Android Open Source Project
+
+License:
+  Apache License, Version 2.0
+  See ../../LICENSES/Apache-2.0.txt
+
+The AOSP data/fonts directory states that the fonts in that directory are
+licensed under Apache License 2.0. This copy is retained solely as the
+source-font reference for the packed Droid Sans Mono tables used by TP-3000.
+
+Exact source-file identity:
+  Filename: DroidSansMono-AOSP.ttf
+  Size: 108128 bytes
+  SHA-256: db19a1fdaba41cc4a2fec0330e5c15e71c6dd68a3ef074f4f28268828b45c862

@@ -1,0 +1,52 @@
+ILI9341_t3-compatible packed font provenance notice
+
+Current TP-3000 font generation
+-------------------------------
+Both distributed packed-font data files are independently generated from the
+licensed outline fonts included under third_party/font_sources/.
+
+Droid Sans Mono:
+  Source: DroidSansMono-AOSP.ttf
+  License: Apache License 2.0
+  Generator: tools/font_provenance/generate_droidsansmono.py
+  Output: fonts_droidsansmono_data.c
+
+Font Awesome 4.5.0:
+  Source: FontAwesome-4.5.0.ttf
+  License: SIL Open Font License 1.1
+  Generator: tools/font_provenance/generate_fontawesome_f080_40.py
+  Output: fonts_fontawesome_f080_data.c
+
+Both generators verify the exact source-font SHA-256 and write packed glyph
+data, index tables and descriptors themselves. Neither generator reads or
+copies a historical ILI9341_fonts C table.
+
+Packed data format
+------------------
+The generated output is compatible with the ILI9341_t3_font_t packed-font
+structure used by the RA8875 display layer. Compatibility with a data format
+does not make the historical ILI9341_fonts collection the source of the
+current generated arrays.
+
+Historical reference
+--------------------
+Earlier TP-3000 development used tables from the ILI9341_fonts collection by
+Paul Stoffregen. That collection did not contain a general Top-Level LICENSE
+file. The old archive is not included in the public TP-3000 package, is not read
+by either current generator and is no longer part of the provenance or build
+chain for distributed font data.
+
+It may still be used outside the public package as a historical visual
+comparison reference. No endorsement of TP-3000 by Paul Stoffregen, Google,
+Steve Matteson, Dave Gandy or Font Awesome is implied.
+
+Verification
+------------
+Run:
+
+  python -m pip install -r tools/font_provenance/requirements.txt
+  python tools/font_provenance/generate_droidsansmono.py --check
+  python tools/font_provenance/generate_fontawesome_f080_40.py --check
+  python tools/font_provenance/verify_font_provenance.py
+
+This is a best-effort provenance record and not legal advice.

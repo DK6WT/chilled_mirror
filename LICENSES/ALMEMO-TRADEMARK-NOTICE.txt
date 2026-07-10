@@ -1,0 +1,49 @@
+TP-3000 ALMEMO / WinControl Interface and Trademark Notice
+================================================================
+
+Deutsch
+-------
+Die Bezeichnungen ALMEMO® und AMR WinControl (im Gerät kurz „WinControl“)
+werden ausschließlich zur sachlichen Beschreibung optionaler
+Schnittstellenfunktionen verwendet:
+
+- optionale serielle Anbindung an ALMEMO-Messgeräte,
+- optionale Messwertausgabe im ALMEMO-V6-Format zur Nutzung mit AMR
+  WinControl über RS232 oder Ethernet/TCP.
+
+ALMEMO® ist eine von der AHLBORN Mess- und Regelungstechnik GmbH verwendete
+Produktbezeichnung und Marke. AMR WinControl wird von der akrobit software GmbH
+entwickelt und für ALMEMO-Systeme über AHLBORN vertrieben.
+
+TP-3000 ist ein unabhängiges Projekt und steht in keiner geschäftlichen oder
+organisatorischen Verbindung zu AHLBORN oder akrobit. Das Projekt wird von
+diesen Unternehmen weder unterstützt, gesponsert, freigegeben, geprüft noch
+zertifiziert.
+
+Es werden keine Rechte an den Bezeichnungen oder Marken ALMEMO oder WinControl
+beansprucht. Es wird kein ALMEMO-, WinControl-, AHLBORN- oder akrobit-Logo
+verwendet. Die Namen beschreiben nur die oben genannten Schnittstellen und
+bedeuten keine allgemeine Kompatibilitäts-, Freigabe- oder
+Zertifizierungszusage.
+
+English
+-------
+The names ALMEMO® and AMR WinControl (shown as “WinControl” in the device) are
+used solely to describe optional interface functions:
+
+- optional serial connection to ALMEMO measuring instruments,
+- optional measurement output in ALMEMO V6 format for use with AMR WinControl
+  via RS232 or Ethernet/TCP.
+
+ALMEMO® is a product name and trademark used by AHLBORN Mess- und
+Regelungstechnik GmbH. AMR WinControl is developed by akrobit software GmbH and
+distributed for ALMEMO systems through AHLBORN.
+
+TP-3000 is an independent project and is not affiliated with AHLBORN or
+akrobit. The project is not supported, sponsored, endorsed, approved, tested or
+certified by either company.
+
+No rights in the ALMEMO or WinControl names or marks are claimed. No ALMEMO,
+WinControl, AHLBORN or akrobit logo is used. The names describe only the
+interfaces listed above and do not state general compatibility, approval or
+certification.

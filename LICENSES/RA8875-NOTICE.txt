@@ -1,0 +1,24 @@
+RA8875 Display Library – Third-Party Notice
+================================================
+
+Component: RA8875 fast SPI display driver
+Version used by TP-3000: 0.7.11
+Author: Max MC Costa / sumotoy
+Copyright notice in upstream source:
+  Copyright (C) 2014 egidio massimo costa
+Upstream project:
+  https://github.com/sumotoy/RA8875
+License:
+  GNU General Public License version 3 or, at your option, any later version
+  (SPDX: GPL-3.0-or-later)
+Full license text in this package:
+  GPL-3.0.txt
+
+The TP-3000 source package does not redistribute a duplicate copy of the RA8875
+library. The current build environment uses Arduino IDE 2.3.10 and Teensyduino
+board package 1.62.0. The expected installation path is:
+
+  Arduino15/packages/teensy/hardware/avr/1.62.0/libraries/RA8875
+
+RA8875 retains its own copyright and license terms. No endorsement of TP-3000 by
+the RA8875 author or the Teensy project is implied.

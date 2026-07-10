@@ -1,0 +1,59 @@
+Font Awesome glyph notice
+
+Included TP-3000 file and symbol:
+  fonts_fontawesome_f080_data.c
+  AwesomeF080_40
+
+Included glyphs and TP-3000 byte slots:
+  0x10 -> U+F090  sign-in / ENTER
+  0x2A -> U+F0AA  chevron-circle-up
+  0x2B -> U+F0AB  chevron-circle-down
+
+Creator / attribution:
+  Dave Gandy / Font Awesome
+
+Source release and font license:
+  Font Awesome v4.5.0
+  SIL Open Font License 1.1
+
+Exact source references included in TP-3000:
+  third_party/font_sources/FontAwesome-4.5.0.ttf
+  Git blob ID: 26dea7951a73079223b50653c455c5adf46a4648
+  SHA-256: 7b5a4320fba0d4c8f79327645b4b9cc875a2ec617a557e849b813918eb733499
+
+  third_party/font_sources/FontAwesome-4.5.0.otf
+  Git blob ID: 3ed7f8b48ad9bfab52eb03822fefcd6b77d2e680
+  SHA-256: 7ed24c05432403117372891543f0cb6a7922100919e7ae077c1f3faf67658dc2
+
+The upstream v4.5.0 README is retained as:
+  third_party/font_sources/FontAwesome-4.5.0-README.md
+  SHA-256: 9f1435a68f2e88e768dced82f9cb070291fbb8f2445e03d3298d208d973d4209
+
+Independent TP-3000 generation:
+  tools/font_provenance/generate_fontawesome_f080_40.py
+
+Parameters:
+  40 pt
+  100 dpi
+  monochrome FreeType rasterization
+  ILI9341_t3_font_t-compatible packed representation
+
+The generator verifies the exact TTF SHA-256 and reads only the official TTF.
+It does not read or copy the historical ILI9341_fonts C tables. The previous
+17 unused AwesomeF080 sizes and all unused glyphs have been removed.
+
+The committed output was generated with FreeType 2.13.2. Different FreeType or
+hinting versions can produce small edge-pixel differences.
+
+Some internal font metadata in the supplied v4.5.0 binaries reports an earlier
+4.4.x build string. The exact distributed files are identified by their
+v4.5.0 release README and SHA-256 values above; no inference is made from the
+internal string alone.
+
+Full license text:
+  OFL-1.1.txt
+
+License separation in TP-3000:
+  The generated Font Awesome data, index and descriptor are contained only in
+  fonts_fontawesome_f080_data.c, marked SPDX-License-Identifier: OFL-1.1.
+  The shared fonts.h file contains declarations only.

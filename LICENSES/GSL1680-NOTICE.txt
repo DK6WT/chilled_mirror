@@ -1,0 +1,69 @@
+GSL1680 Touchscreen Driver and Panel Firmware – Third-Party Notice
+==================================================================
+
+Driver files in TP-3000
+-----------------------
+- GSL1680.cpp
+- GSL1680.h
+- GSL1680Firmware.h (TP-3000 local include wrapper)
+
+Driver lineage and license
+--------------------------
+The Arduino driver used by TP-3000 is based on Skallwar/GSL1680 (ESTBLC),
+which credits and is based in part on wolfmanjm/GSL1680. The TP-3000 copy is
+not a byte-for-byte mirror; it contains local adaptations for Teensy Wire1 and
+the TP-3000 source layout.
+
+Upstream repositories:
+- https://github.com/Skallwar/GSL1680
+- https://github.com/wolfmanjm/GSL1680
+
+Both upstream repositories are currently distributed under GNU General Public
+License version 3. In July 2026 the Skallwar maintainer clarified that the
+project originated from wolfmanjm/GSL1680 and therefore should have been GPLv3
+from the beginning; the public repository license was corrected accordingly.
+The rights in contributions merged upstream remain with their respective
+authors.
+
+TP-3000 therefore treats the combined driver files as:
+
+  SPDX-License-Identifier: GPL-3.0-only
+
+Full license text: GPL-3.0.txt
+
+Original authorship, attribution and modification notices must be preserved.
+No affiliation with or endorsement by any upstream author is implied.
+Apache-2.0.txt remains in the TP-3000 package for other components, including
+Droid Sans Mono; it no longer describes the GSL1680 driver files.
+
+Panel-specific firmware – not included
+--------------------------------------
+The panel-specific GSL1680 firmware table is a separate vendor component. Its
+copyright provenance and redistribution permission are not conclusively
+documented, and it is not claimed to be covered by the TP-3000 GPL license.
+
+This public source package does NOT contain:
+
+  external/GSL1680/gslX680_311_5_F.h
+
+The successfully tested EastRising/BuyDisplay reference file had SHA-256:
+
+  ea756ce8d96631337fa09abe22c4e95aaad86cb706b561a52dfd143e751edd96
+
+That checksum is recorded only to identify the tested vendor file. Users obtain
+the firmware matching their exact panel directly from the display manufacturer
+and copy it locally under the original filename. The file must not be committed;
+.gitignore excludes it.
+
+The original vendor file should remain byte-for-byte unchanged. The TP-3000
+wrapper maps the vendor's 8051 keyword `code` to `PROGMEM` only while including
+the file, so the firmware table stays in Teensy flash. Without the local vendor
+file the build stops with an explicit error.
+
+A compiled HEX/BIN image contains the panel firmware data when that local file
+was present during compilation. No such compiled image is included in this
+source package.
+
+Installation details are in:
+
+  external/GSL1680/README.md
