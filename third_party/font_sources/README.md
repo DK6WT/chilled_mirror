@@ -43,8 +43,11 @@ in the same run.
 - Release README SHA-256:
   `9f1435a68f2e88e768dced82f9cb070291fbb8f2445e03d3298d208d973d4209`
 
-The release README is retained as `FontAwesome-4.5.0-README.md`; the complete
-OFL-1.1 text is in `../../LICENSES/OFL-1.1.txt`.
+The release README is retained unmodified as `FontAwesome-4.5.0-README.md`.
+That documentation file is CC BY 3.0 Unported; its central attribution and
+license-URI notice is in `../../LICENSES/CC-BY-3.0-NOTICE.txt`. The TTF/OTF
+files and generated glyph data are separately covered by the complete OFL-1.1
+text in `../../LICENSES/OFL-1.1.txt`.
 
 `../../fonts_fontawesome_f080_data.c` is generated directly from the TTF by:
 

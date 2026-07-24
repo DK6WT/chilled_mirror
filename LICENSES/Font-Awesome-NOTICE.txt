@@ -28,6 +28,8 @@ Exact source references included in TP-3000:
 The upstream v4.5.0 README is retained as:
   third_party/font_sources/FontAwesome-4.5.0-README.md
   SHA-256: 9f1435a68f2e88e768dced82f9cb070291fbb8f2445e03d3298d208d973d4209
+  Documentation license: Creative Commons Attribution 3.0 Unported
+  Central notice: LICENSES/CC-BY-3.0-NOTICE.txt
 
 Independent TP-3000 generation:
   tools/font_provenance/generate_fontawesome_f080_40.py

@@ -15,6 +15,13 @@
 This record describes the source tree prepared for a first GitHub upload. It is
 a best-effort engineering record and not legal advice.
 
+## Clean archive note
+
+A release source ZIP must not contain a local `.git/` directory. GitHub-generated
+source archives omit it automatically. A manually created release asset must be
+packed from the tracked working-tree files only, so local reflogs, repository
+configuration and author metadata are not redistributed.
+
 ## Version scheme
 
 The firmware-visible version remains `0.50.0`. Historical development snapshot
@@ -119,8 +126,10 @@ TP-3000 byte positions. Neither generator reads or copies historical
 ILI9341_fonts C tables.
 
 The exact licensed source fonts are included under `third_party/font_sources/`.
-Source checksums, license assignments and reproducibility commands are recorded
-in `THIRD_PARTY_NOTICES.md`, `LICENSES/` and `tools/font_provenance/`.
+The retained upstream Font Awesome release README is documentation under CC BY
+3.0 Unported and has a central notice in `LICENSES/CC-BY-3.0-NOTICE.txt`. Source
+checksums, license assignments and reproducibility commands are recorded in
+`THIRD_PARTY_NOTICES.md`, `LICENSES/` and `tools/font_provenance/`.
 
 ## Publication checks completed
 

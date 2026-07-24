@@ -53,7 +53,9 @@ best-effort engineering audit and not legal advice.
   scrolling.
 - Bundled the exact AOSP Droid Sans Mono source font (Apache-2.0) and the
   exact Font Awesome 4.5.0 TTF/OTF source fonts (OFL-1.1), with hashes and
-  license texts.
+  license texts. The unchanged upstream Font Awesome release README is
+  separately documented as CC BY 3.0 Unported in
+  `LICENSES/CC-BY-3.0-NOTICE.txt`.
 - Split the packed font data by license: `fonts_droidsansmono_data.c` contains
   independently generated Droid Sans Mono data (Apache-2.0),
   `fonts_fontawesome_f080_data.c` contains independently generated Font Awesome

@@ -30,9 +30,15 @@ nicht Teil der festen Build-Konfiguration.
 
 1. Das vollständige TP-3000-Quellpaket in einen lokalen Ordner entpacken.
 2. In der Arduino IDE die Datei `TP-3000.ino` öffnen.
-3. Prüfen, dass die projektlokalen Bibliotheken im Unterordner `libraries/`
-   vorhanden sind.
-4. Die zum verwendeten Display gehörende GSL1680-Herstellerfirmware lokal unter
+3. Die Ordner `ProtoCentral_ADS1262_32-bit_precision_ADC_Library`,
+   `RTC_RV3129_Arduino_Library` und `SparkFun_BMP581_Arduino_Library` aus dem
+   mitgelieferten Verzeichnis `libraries/` unverändert nach
+   `<Sketchbook>\libraries\` kopieren und Arduino IDE neu starten. Einen
+   beliebigen `libraries/`-Unterordner neben dem Sketch durchsucht die IDE für
+   Includes in spitzen Klammern nicht automatisch.
+4. `WDT_T4` bleibt im Projektordner: Der Sketch bindet
+   `libraries/WDT_T4/Watchdog_t4.h` direkt ein.
+5. Die zum verwendeten Display gehörende GSL1680-Herstellerfirmware lokal unter
    `external/GSL1680/gslX680_311_5_F.h` installieren.
 
 ## 2.1 Optional: Fonts neu erzeugen oder prüfen

@@ -1,0 +1,18 @@
+Creative Commons Attribution 3.0 Unported notice
+
+Covered file:
+  third_party/font_sources/FontAwesome-4.5.0-README.md
+
+Creator / attribution:
+  Dave Gandy / Font Awesome
+  Font Awesome v4.5.0
+
+License for this retained upstream documentation file:
+  Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+  https://creativecommons.org/licenses/by/3.0/
+
+The file is retained unmodified from the official Font Awesome v4.5.0 release.
+It contains its own creator attribution and license URI. The Font Awesome TTF
+and OTF files and the generated TP-3000 glyph data are separately licensed
+under the SIL Open Font License 1.1; see OFL-1.1.txt and
+Font-Awesome-NOTICE.txt.

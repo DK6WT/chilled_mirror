@@ -156,6 +156,8 @@ nicht aus einer früheren Bitmap übernommen.
 - Creator: Dave Gandy / Font Awesome
 - Quelle: offizieller Release-Stand Font Awesome `v4.5.0`
 - Font-Lizenz: SIL Open Font License 1.1
+- unverändert mitgelieferte Upstream-README: CC BY 3.0 Unported
+- zentrale Hinweise: `LICENSES/Font-Awesome-NOTICE.txt`, `LICENSES/CC-BY-3.0-NOTICE.txt`
 - mitgelieferte Quelldateien:
   `FontAwesome-4.5.0.ttf` und `FontAwesome-4.5.0.otf`
 - TTF SHA-256:
