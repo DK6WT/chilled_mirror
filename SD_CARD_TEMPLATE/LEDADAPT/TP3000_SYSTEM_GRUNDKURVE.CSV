@@ -1,0 +1,19 @@
+# Vorlage fuer die bevorzugte System-Grundkurve.
+# Diese Beispielwerte entsprechen nur der eingebauten OD-850FHT-Herstellerkurve.
+# Fuer die reale Seriengrundkurve CURRENT_FACTOR durch gemessene Werte der kompletten Optikkette ersetzen.
+TP3000_SYSTEM_GRUNDKURVE;1
+CURVE_ID;OD850FHT_TEMPLATE_REPLACE
+HEAD_TYPE;ANY
+REFERENCE_TEMP_C;25.0
+TEMP_C;CURRENT_FACTOR
+0.0;0.884956
+5.0;0.905797
+10.0;0.927644
+15.0;0.950570
+20.0;0.974659
+25.0;1.000000
+30.0;1.028807
+35.0;1.059322
+40.0;1.091703
+45.0;1.126126
+50.0;1.162791

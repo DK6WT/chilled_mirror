@@ -20,6 +20,9 @@
 #include "EEPROMAnything.h"
 
 extern var_t R;
+extern uint8_t led_autoadaptation_mode;
+extern uint8_t ledAdaptationModeGet(void);
+extern bool ledAdaptationSetMode(uint8_t mode);
 extern bool deviceSerialNormalize(char* text, size_t textSize);
 extern const char* deviceSerialGet(void);
 extern bool deviceSerialSet(const char* text);
@@ -115,7 +118,9 @@ typedef struct
   uint8_t  interface_data[DEVICE_SETTINGS_INTERFACE_BYTES];
   uint8_t  alarm_data[DEVICE_SETTINGS_ALARM_BYTES];
 
-  uint8_t reserved[24];
+  // Kodierung 1..3; Null bleibt fuer alte Backups als "Default" reserviert.
+  uint8_t led_autoadaptation_mode_encoded;
+  uint8_t reserved[23];
   uint32_t crc;
 } device_settings_backup_t;
 
@@ -390,6 +395,7 @@ bool FLASHMEM deviceSettingsBackupSave()
   st.ui_language_value = (ui_language < LANG_COUNT) ? ui_language : LANG_DE;
   st.adc_filter_mode = adcFilterModeGet();
   st.adc1_sfocal_mode = adc1SfocalModeGet();
+  st.led_autoadaptation_mode_encoded = (uint8_t)(ledAdaptationModeGet() + 1U);
 
   if (!interfaceConfigExport(st.interface_data, DEVICE_SETTINGS_INTERFACE_BYTES, &st.interface_size)) return false;
   if (!alarmConfigExport(st.alarm_data, DEVICE_SETTINGS_ALARM_BYTES, &st.alarm_size)) return false;
@@ -475,6 +481,16 @@ bool FLASHMEM deviceSettingsBackupLoad()
   R.optik_sollwert = keep_optik_sollwert;
 
   deviceSerialNormalize(R.geraete_name, sizeof(R.geraete_name));
+  uint8_t restoredLedAdaptMode = LED_AUTOADAPT_DEFAULT;
+  if (st.led_autoadaptation_mode_encoded >= 1U &&
+      st.led_autoadaptation_mode_encoded <= (LED_AUTOADAPT_MAX + 1U))
+  {
+    restoredLedAdaptMode =
+        (uint8_t)(st.led_autoadaptation_mode_encoded - 1U);
+  }
+  // Ein geladener Backupstand darf die SD-Pflicht nicht umgehen. Ohne Karte
+  // setzt der zentrale Setter den Modus sicher auf AUS.
+  (void)ledAdaptationSetMode(restoredLedAdaptMode);
   tpMainConfigSave();
 
   ui_language = (st.ui_language_value < LANG_COUNT) ? st.ui_language_value : LANG_DE;

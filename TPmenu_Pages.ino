@@ -84,6 +84,8 @@ void FLASHMEM regler_parameter_auswahl_menu(void)
   extern void controlParamsSaveAndLock(void);
   extern void controlParamsDiscardAndLock(void);
   extern bool controlParamsEditUnlocked(void);
+  extern uint8_t ledAdaptationModeGet(void);
+  extern uint32_t ledAdaptationAcceptedCount(void);
 
   if (VirtLCDMenu == nullptr) return;
 
@@ -133,6 +135,15 @@ void FLASHMEM regler_parameter_auswahl_menu(void)
       VirtLCDMenu->setCursor(1, 6);
       snprintf(lcd_buf, 255, "Takt: %u ms  Lüfter: %u%%", (unsigned)R.regler_intervall_ms, (unsigned)R.fan_percent);
       VirtLCDMenu->print(lcd_buf);
+      VirtLCDMenu->setCursor(1, 7);
+      {
+        const uint8_t ledMode = ledAdaptationModeGet();
+        const char* ledModeText = (ledMode == LED_AUTOADAPT_SELF) ? "selbstlernend" :
+                                  (ledMode == LED_AUTOADAPT_BASE) ? "Grundkurve" : "aus";
+        snprintf(lcd_buf, 255, "LED-Adaption: %s  n=%lu", ledModeText,
+                 (unsigned long)ledAdaptationAcceptedCount());
+        VirtLCDMenu->print(lcd_buf);
+      }
       lcd_scroll_Menu(items, n, current_selection, 8, 1, 2);
       VirtLCDMenu->transfer();
       ReadButtons(true);
@@ -149,6 +160,8 @@ void FLASHMEM regler_parameter_auswahl_menu(void)
     "Optik-Zielwert",
     "Freiheiztemperatur",
     "Auto-Cal Intervall",
+    "LED-Autoadaption",
+    "LED-Lerndaten zurücksetzen",
     "Messfilter",
     "ADC1 SFOCAL",
     "Werte speichern",
@@ -164,6 +177,8 @@ void FLASHMEM regler_parameter_auswahl_menu(void)
     MENU_OPTIK_TARGET,
     MENU_FREIHEIZ_TEMP,
     MENU_AUTOCAL_INTERVAL,
+    MENU_LED_AUTOADAPTATION,
+    MENU_LED_LEARNING_RESET,
     MENU_ADC_FILTER_MODE,
     MENU_ADC1_SFOCAL_MODE,
     MENU_MAIN,
@@ -176,13 +191,13 @@ void FLASHMEM regler_parameter_auswahl_menu(void)
 
   if (menuListHandleInput(current_selection, n, 250))
   {
-    if (current_selection == 10)
+    if (current_selection == 12)
     {
       controlParamsSaveAndLock();
       menu_level = MENU_MAIN;
       untermenue_frisch = true;
     }
-    else if (current_selection == 11 || current_selection == 12)
+    else if (current_selection == 13 || current_selection == 14)
     {
       controlParamsDiscardAndLock();
       menu_level = MENU_MAIN;
@@ -410,6 +425,157 @@ void FLASHMEM kalibrierung_haupt_menu(void)
   }
 }
 
+
+// =========================================================================
+// SIGNIERTE KALIBRIERUNG: SD-EXPORT / IMPORT
+// =========================================================================
+void FLASHMEM signed_calibration_menu(void)
+{
+  static int8_t current_selection = 0;
+
+  if (VirtLCDMenu == nullptr) return;
+
+  if (menuRunTextList(TXT_SIGNED_CAL_TITLE,
+                      signed_calibration_menu_items,
+                      signed_calibration_menu_size,
+                      current_selection))
+  {
+    if (current_selection >= 0 && current_selection < signed_calibration_menu_size)
+    {
+      menu_level = signed_calibration_menu_next[current_selection];
+    }
+    else
+    {
+      menu_level = MENU_CALIBRATION;
+    }
+
+    flag.menu_lcd_upd = false;
+  }
+}
+
+static const char* signedCalActionTitle(uint16_t level)
+{
+  const bool en = (ui_language == LANG_EN);
+  switch (level)
+  {
+    case MENU_SIGNED_CAL_DEVICE_REQ:
+      return en ? "DEVICE CAL REQUEST" : "GERAETE-ANFRAGE";
+    case MENU_SIGNED_CAL_HEAD_REQ:
+      return en ? "HEAD CAL REQUEST" : "KOPF-ANFRAGE";
+    case MENU_SIGNED_CAL_DEVICE_IMP:
+      return en ? "IMPORT DEVICE APPROVAL" : "GERAETEFREIGABE IMPORT";
+    case MENU_SIGNED_CAL_HEAD_IMP:
+      return en ? "IMPORT HEAD CERTIFICATE" : "KOPFZERTIFIKAT IMPORT";
+    default:
+      return en ? "SIGNED CALIBRATION" : "SIGNIERTE KALIBRIERUNG";
+  }
+}
+
+void FLASHMEM signed_calibration_action_menu(void)
+{
+  static uint16_t lastLevel = 0xFFFFU;
+  static bool actionDone = false;
+  static bool actionOk = false;
+  static char path[128] = {0};
+  static char message[160] = {0};
+
+  if (VirtLCDMenu == nullptr || VirtLCDMessage == nullptr) return;
+
+  FirstBut = 0;
+  LastBut = 3;
+
+  if (lastLevel != menu_level)
+  {
+    lastLevel = menu_level;
+    actionDone = false;
+    actionOk = false;
+    path[0] = '\0';
+    message[0] = '\0';
+    flag.menu_lcd_upd = false;
+  }
+
+  if (!actionDone)
+  {
+    switch (menu_level)
+    {
+      case MENU_SIGNED_CAL_DEVICE_REQ:
+        actionOk = tpSignedCalibrationCreateDeviceRequestOnSd(
+            path, sizeof(path), message, sizeof(message));
+        break;
+
+      case MENU_SIGNED_CAL_HEAD_REQ:
+        actionOk = tpSignedCalibrationCreateHeadRequestOnSd(
+            path, sizeof(path), message, sizeof(message));
+        break;
+
+      case MENU_SIGNED_CAL_DEVICE_IMP:
+        actionOk = tpSignedCalibrationImportDeviceFromSd(
+            path, sizeof(path), message, sizeof(message));
+        break;
+
+      case MENU_SIGNED_CAL_HEAD_IMP:
+        actionOk = tpSignedCalibrationImportHeadFromSd(
+            path, sizeof(path), message, sizeof(message));
+        break;
+
+      default:
+        snprintf(message, sizeof(message), "%s",
+                 (ui_language == LANG_EN) ? "Unknown action" : "Unbekannte Aktion");
+        actionOk = false;
+        break;
+    }
+
+    actionDone = true;
+    menuBlockInputUntilTouchRelease();
+    flag.menu_lcd_upd = false;
+  }
+
+  ReadButtons(false);
+  const uint8_t key = menuReadKey(250);
+  if (key == MK_ENTER)
+  {
+    lastLevel = 0xFFFFU;
+    actionDone = false;
+    menu_level = MENU_SIGNED_CALIBRATION;
+    flag.menu_lcd_upd = false;
+    TouchZ = false;
+    return;
+  }
+
+  if (!flag.menu_lcd_upd)
+  {
+    flag.menu_lcd_upd = true;
+    VirtLCDMenu->clear();
+    VirtLCDMessage->clear();
+
+    VirtLCDMenu->setCursor(2, 1);
+    VirtLCDMenu->print("--- ");
+    VirtLCDMenu->print(signedCalActionTitle(menu_level));
+    VirtLCDMenu->print(" ---");
+
+    VirtLCDMenu->setCursor(2, 4);
+    VirtLCDMenu->print(actionOk
+      ? ((ui_language == LANG_EN) ? "SUCCESS" : "ERFOLGREICH")
+      : ((ui_language == LANG_EN) ? "FAILED" : "FEHLGESCHLAGEN"));
+
+    VirtLCDMenu->setCursor(2, 6);
+    VirtLCDMenu->print(message[0] != '\0' ? message : (actionOk ? "OK" : "Fehler"));
+
+    if (path[0] != '\0')
+    {
+      VirtLCDMenu->setCursor(2, 8);
+      VirtLCDMenu->print((ui_language == LANG_EN) ? "File: " : "Datei: ");
+      VirtLCDMenu->print(path);
+    }
+
+    VirtLCDMenu->setCursor(2, 11);
+    VirtLCDMenu->print((ui_language == LANG_EN) ? "ENTER: back" : "ENTER: zurueck");
+
+    VirtLCDMenu->transfer();
+    VirtLCDMessage->transfer();
+    ReadButtons(true);
+  }
+}
 
 // =========================================================================
 // Pt100 2-PUNKT SENSORWAHL
@@ -971,9 +1137,11 @@ void FLASHMEM device_settings_save_menu(void)
 
 void FLASHMEM device_factory_cal_save_menu(void)
 {
-  // Ablauf: altes Passwort pruefen, neue Geraete-SN eingeben, dann die
-  // Werksjustierung mit dieser neuen Geraete-SN speichern und uebernehmen.
-  static uint8_t phase = 0; // 0 = Passwort alt, 1 = neue Geraete-SN, 2 = Ergebnis
+  // Ohne Zertifikat: altes Passwort pruefen, neue Geraete-SN eingeben und
+  // Werksjustierung unter dieser SN speichern. Mit gueltigem Zertifikat ist
+  // die Geraete-SN verbindlich: keine Aenderung anzeigen oder zulassen;
+  // nach der Passwortpruefung direkt unter der zertifizierten SN speichern.
+  static uint8_t phase = 0; // 0 = Passwort, 1 = neue SN (nur unzertifiziert), 2 = Ergebnis
   static bool lastResult = false;
   static bool passwordWrong = false;
   static uint8_t digit_index = 0;
@@ -1043,6 +1211,19 @@ void FLASHMEM device_factory_cal_save_menu(void)
         return;
       }
 
+      if (deviceIdentityCertificateValid())
+      {
+        // Zertifizierte SN ist schreibgeschuetzt. Sie wird weder abgefragt
+        // noch geaendert, sondern verbindlich fuer das Backup verwendet.
+        lastResult = deviceFactoryCalBackupSaveForSerial(deviceSerialGet());
+        passwordWrong = false;
+        phase = 2;
+        flag.short_push = false;
+        flag.menu_lcd_upd = false;
+        menu_global_debounce = millis();
+        return;
+      }
+
       for (uint8_t i = 0; i < DEVICE_SERIAL_DIGITS; i++)
       {
         const char c = deviceSerialGet()[i];
@@ -1080,7 +1261,15 @@ void FLASHMEM device_factory_cal_save_menu(void)
     VirtLCDMenu->setCursor(1, 3);
     if (phase == 0)
     {
-      VirtLCDMenu->print("Aktuelle Geräte-SN prüfen");
+      if (deviceIdentityCertificateValid())
+      {
+        snprintf(lcd_buf, 255, "Zertifiziert: G%s", deviceSerialGet());
+        VirtLCDMenu->print(lcd_buf);
+      }
+      else
+      {
+        VirtLCDMenu->print("Aktuelle Geräte-SN prüfen");
+      }
       VirtLCDMenu->setCursor(1, 5);
       VirtLCDMenu->print("Passwort eingeben:");
     }
@@ -1552,6 +1741,7 @@ void FLASHMEM head_type_menu(void)
           headTypeTextSet(typeText);
         }
         tpMainConfigSave();
+        tpSignedCalibrationInvalidateCache();
       }
       frisch = true;
       menu_level = MENU_SENSOR_HEAD;
@@ -2112,7 +2302,7 @@ static const char* const infoLicenseLinesDE[] =
 static const char* const infoLicenseLinesEN[] =
 {
   "TP-3000 Dew Point Mirror Firmware",
-  "Version " VERSION " | 2026-07-11",
+  "Version " VERSION " | " TP_FIRMWARE_BUILD_DATE_ISO,
   "Copyright (C) 2025/2026 S. Brachtl",
   "",
   "Based on LJ2000M T_2.06c by:",
@@ -2378,6 +2568,589 @@ void FLASHMEM alarm_haupt_menu(void)
     }
 
     flag.menu_lcd_upd = false;
+  }
+}
+
+
+// ============================================================================
+// INFO / GÜLTIGKEIT: kompakte, scrollbare Nur-Anzeige
+// ============================================================================
+static const uint8_t validityInfoLineCount = 43U;
+static DMAMEM TpSystemFirmwareContextStatus validityInfoFirmwareContext;
+static TpSystemFirmwareApplicability validityInfoFirmwareApplicability =
+    TP_SYSTEM_FW_APPLICABILITY_NOT_COMPARABLE;
+
+static void FLASHMEM validityInfoPrepareFirmwareContext(void)
+{
+  memset(&validityInfoFirmwareContext, 0,
+         sizeof(validityInfoFirmwareContext));
+  validityInfoFirmwareApplicability =
+      TP_SYSTEM_FW_APPLICABILITY_NOT_COMPARABLE;
+  const TpSystemCalibrationStatus& system =
+      tpSignedCalibrationSystemStatus();
+  if (!system.signatureValid || system.sourceRequestId[0] == '\0' ||
+      system.sourceRequestManifestSha256[0] == '\0') return;
+  if (tpSystemFirmwareContextLoad(system.sourceRequestId,
+                                  system.sourceRequestManifestSha256,
+                                  validityInfoFirmwareContext))
+    validityInfoFirmwareApplicability =
+        validityInfoFirmwareContext.applicability;
+}
+
+static TpCalibrationTimeStatus FLASHMEM validityInfoSystemTimeStatus(
+    const TpSystemCalibrationStatus& status,
+    int64_t unixTimeUtc)
+{
+  if (!status.signatureValid || unixTimeUtc <= 0 || status.validFromUtc <= 0 ||
+      status.validUntilUtc < status.validFromUtc) return TP_CAL_TIME_UNKNOWN;
+  if (unixTimeUtc < status.validFromUtc) return TP_CAL_TIME_NOT_YET_VALID;
+  if (unixTimeUtc > status.validUntilUtc) return TP_CAL_TIME_EXPIRED;
+  return TP_CAL_TIME_VALID;
+}
+
+static const char* FLASHMEM validityInfoSystemText(
+    bool ready,
+    const TpSystemCalibrationStatus& status,
+    TpCalibrationTimeStatus timeStatus)
+{
+  if (!ready)
+  {
+    if (status.filePresent && status.lastError[0] != '\0') return status.lastError;
+    return ui_language == LANG_EN ? "Not imported" : "Nicht importiert";
+  }
+  if (!status.applicabilityStateKnown)
+    return ui_language == LANG_EN
+      ? "Signed - applicability unknown"
+      : "Signiert - Anwendbarkeit unbekannt";
+  if (status.applicabilityEnded)
+    return ui_language == LANG_EN
+      ? "Signed - no longer applicable"
+      : "Signiert - nicht mehr anwendbar";
+  if (ui_language == LANG_EN)
+  {
+    switch (timeStatus)
+    {
+      case TP_CAL_TIME_VALID: return "Signed / valid";
+      case TP_CAL_TIME_EXPIRED: return "Signed / expired";
+      case TP_CAL_TIME_NOT_YET_VALID: return "Signed / not yet valid";
+      default: return "Signed / time unknown";
+    }
+  }
+  switch (timeStatus)
+  {
+    case TP_CAL_TIME_VALID: return "Signiert / gültig";
+    case TP_CAL_TIME_EXPIRED: return "Signiert / abgelaufen";
+    case TP_CAL_TIME_NOT_YET_VALID: return "Signiert / noch nicht gültig";
+    default: return "Signiert / Zeit unbekannt";
+  }
+}
+
+static uint16_t FLASHMEM validityInfoSystemColor(
+    bool ready,
+    const TpSystemCalibrationStatus& status,
+    TpCalibrationTimeStatus timeStatus)
+{
+  if (!ready) return status.filePresent ? RED : YELLOW;
+  if (!status.applicabilityStateKnown || status.applicabilityEnded) return RED;
+  if (timeStatus == TP_CAL_TIME_EXPIRED) return RED;
+  // Der Kalibrierscheinstatus bleibt grün, wenn Signatur, Bindung und Zeit
+  // gültig sind. Eine reine Firmwareabweichung wird getrennt in Zeile 24
+  // gelb dargestellt und färbt nicht mehr den Scheinstatus um.
+  return timeStatus == TP_CAL_TIME_VALID ? GREEN : YELLOW;
+}
+
+static uint16_t FLASHMEM validityInfoCalibrationColor(
+    bool ready,
+    const TpSignedCalibrationStatus& status,
+    TpCalibrationTimeStatus timeStatus)
+{
+  if (!ready) return status.filePresent ? RED : YELLOW;
+  if (timeStatus == TP_CAL_TIME_EXPIRED) return RED;
+  return timeStatus == TP_CAL_TIME_VALID ? GREEN : YELLOW;
+}
+
+static void FLASHMEM validityInfoFormatYmd(uint32_t ymd,
+                                           char* output,
+                                           size_t outputSize)
+{
+  if (output == nullptr || outputSize == 0U) return;
+  const uint32_t yy = ymd / 10000UL;
+  const uint32_t mm = (ymd / 100UL) % 100UL;
+  const uint32_t dd = ymd % 100UL;
+  if (yy < 2020UL || yy > 2099UL || mm < 1UL || mm > 12UL || dd < 1UL || dd > 31UL)
+  {
+    strncpy(output, "--", outputSize - 1U);
+    output[outputSize - 1U] = '\0';
+    return;
+  }
+  snprintf(output, outputSize, "%02lu.%02lu.%04lu",
+           (unsigned long)dd, (unsigned long)mm, (unsigned long)yy);
+}
+
+static void FLASHMEM validityInfoFormatUtc(int64_t unixTime,
+                                           char* output,
+                                           size_t outputSize)
+{
+  if (output == nullptr || outputSize == 0U) return;
+  if (unixTime <= 0)
+  {
+    strncpy(output, "--", outputSize - 1U);
+    output[outputSize - 1U] = '\0';
+    return;
+  }
+  const time_t t = (time_t)unixTime;
+  snprintf(output, outputSize, "%02d.%02d.%04d %02d:%02d UTC",
+           day(t), month(t), year(t), hour(t), minute(t));
+}
+
+static const char* FLASHMEM validityInfoCalibrationText(
+    bool ready,
+    const TpSignedCalibrationStatus& status,
+    TpCalibrationTimeStatus timeStatus)
+{
+  if (!ready)
+  {
+    if (status.filePresent && status.lastError[0] != '\0') return status.lastError;
+    return (ui_language == LANG_EN) ? "Not imported" : "Nicht importiert";
+  }
+
+  if (ui_language == LANG_EN)
+  {
+    switch (timeStatus)
+    {
+      case TP_CAL_TIME_VALID: return "Signed / valid";
+      case TP_CAL_TIME_EXPIRED: return "Signed / expired";
+      case TP_CAL_TIME_NOT_YET_VALID: return "Signed / not yet valid";
+      default: return "Signed / time unknown";
+    }
+  }
+
+  switch (timeStatus)
+  {
+    case TP_CAL_TIME_VALID: return "Signiert / gültig";
+    case TP_CAL_TIME_EXPIRED: return "Signiert / abgelaufen";
+    case TP_CAL_TIME_NOT_YET_VALID: return "Signiert / noch nicht gültig";
+    default: return "Signiert / Zeit unbekannt";
+  }
+}
+
+static void FLASHMEM validityInfoLimitUtf8(char* text, size_t maxGlyphs)
+{
+  if (text == nullptr) return;
+  size_t offset = 0U;
+  size_t glyphs = 0U;
+  while (text[offset] != '\0' && glyphs < maxGlyphs)
+  {
+    const uint8_t first = static_cast<uint8_t>(text[offset]);
+    size_t step = 1U;
+    if ((first & 0xE0U) == 0xC0U) step = 2U;
+    else if ((first & 0xF0U) == 0xE0U) step = 3U;
+    else if ((first & 0xF8U) == 0xF0U) step = 4U;
+    for (size_t i = 1U; i < step; ++i)
+      if ((static_cast<uint8_t>(text[offset + i]) & 0xC0U) != 0x80U)
+      {
+        step = 1U;
+        break;
+      }
+    offset += step;
+    ++glyphs;
+  }
+  if (text[offset] != '\0') text[offset] = '\0';
+}
+
+static void FLASHMEM validityInfoHashHalf(const char* hash,
+                                           bool secondHalf,
+                                           char* output,
+                                           size_t outputSize)
+{
+  if (output == nullptr || outputSize == 0U) return;
+  const char* value = (hash != nullptr && strlen(hash) >= 64U) ? hash : nullptr;
+  if (value == nullptr)
+  {
+    strncpy(output, "--", outputSize - 1U);
+    output[outputSize - 1U] = '\0';
+    return;
+  }
+  const size_t start = secondHalf ? 32U : 0U;
+  const size_t count = outputSize - 1U < 32U ? outputSize - 1U : 32U;
+  memcpy(output, value + start, count);
+  output[count] = '\0';
+}
+
+static const char* FLASHMEM validityInfoDeviceStatusShort(void)
+{
+  if (ui_language == LANG_EN)
+  {
+    if (deviceIdentityCertificateValid()) return "Certified (TEST ROOT)";
+    if (deviceIdentityCertificateStoredInvalid()) return "Certificate invalid";
+    if (deviceIdentityHasKey()) return "Key present, not certified";
+    return "No device key";
+  }
+  if (deviceIdentityCertificateValid()) return "Zertifiziert (TEST-ROOT)";
+  if (deviceIdentityCertificateStoredInvalid()) return "Zertifikat ungültig";
+  if (deviceIdentityHasKey()) return "Schlüssel, nicht zertifiziert";
+  return "Kein Geräteschlüssel";
+}
+
+static void FLASHMEM validityInfoBuildLine(uint8_t index,
+                                           char* output,
+                                           size_t outputSize,
+                                           uint16_t* color)
+{
+  if (output == nullptr || outputSize == 0U || color == nullptr) return;
+  output[0] = '\0';
+  *color = WHITE;
+
+  const bool deviceReady = tpSignedCalibrationDeviceReady();
+  const bool headReady = tpSignedCalibrationHeadReady();
+  const TpSignedCalibrationStatus& deviceStatus = tpSignedCalibrationDeviceStatus();
+  const TpSignedCalibrationStatus& headStatus = tpSignedCalibrationHeadStatus();
+  (void)tpSignedCalibrationSystemReady();
+  const TpSystemCalibrationStatus& systemStatus = tpSignedCalibrationSystemStatus();
+  const bool systemReady = systemStatus.signatureValid &&
+      systemStatus.bindingMatchesCurrent;
+  const int64_t currentUtc = tpCurrentUtcUnixTime();
+  const TpCalibrationTimeStatus deviceTime = tpSignedCalibrationTimeStatus(deviceStatus, currentUtc);
+  const TpCalibrationTimeStatus headTime = tpSignedCalibrationTimeStatus(headStatus, currentUtc);
+  const TpCalibrationTimeStatus systemTime = validityInfoSystemTimeStatus(systemStatus, currentUtc);
+  const TpFirmwareRuntimeIdentity& firmware = tpSignedDataFirmwareIdentity();
+  const TpFirmwareIntegrityStatus& firmwareIntegrity = tpFirmwareIntegrityStatus();
+
+  char value[68];
+  switch (index)
+  {
+    case 0:
+      strncpy(output, ui_language == LANG_EN ? "DEVICE" : "GERÄT", outputSize - 1U);
+      *color = YELLOW;
+      break;
+    case 1:
+      snprintf(output, outputSize, "Status: %s", validityInfoDeviceStatusShort());
+      *color = deviceIdentityCertificateValid() ? GREEN :
+               (deviceIdentityCertificateStoredInvalid() ? RED : YELLOW);
+      break;
+    case 2:
+      snprintf(output, outputSize, "%s: %s",
+               ui_language == LANG_EN ? "Device SN" : "Geräte-SN", deviceSerialGet());
+      break;
+    case 3:
+      validityInfoFormatUtc(deviceIdentityCertificateIssuedUtc(), value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Issued" : "Ausgestellt", value);
+      break;
+    case 4:
+      break;
+    case 5:
+      strncpy(output, ui_language == LANG_EN ? "DEVICE CALIBRATION" : "GERÄTE-KALIBRIERUNG", outputSize - 1U);
+      *color = YELLOW;
+      break;
+    case 6:
+      snprintf(output, outputSize, "Status: %.48s",
+               validityInfoCalibrationText(deviceReady, deviceStatus, deviceTime));
+      *color = validityInfoCalibrationColor(deviceReady, deviceStatus, deviceTime);
+      break;
+    case 7:
+      validityInfoFormatYmd(deviceStatus.calibrationDateYmd, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.16s",
+               ui_language == LANG_EN ? "Calibrated" : "Kalibriert", value);
+      break;
+    case 8:
+      validityInfoFormatUtc(deviceStatus.validFromUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid from" : "Gültig ab", value);
+      break;
+    case 9:
+      validityInfoFormatUtc(deviceStatus.validUntilUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid until" : "Gültig bis", value);
+      break;
+    case 10:
+      break;
+    case 11:
+      strncpy(output, ui_language == LANG_EN ? "HEAD CERTIFICATE / CALIBRATION" : "KOPFZERTIFIKAT / KALIBRIERUNG", outputSize - 1U);
+      *color = YELLOW;
+      break;
+    case 12:
+      snprintf(output, outputSize, "Status: %.48s",
+               validityInfoCalibrationText(headReady, headStatus, headTime));
+      *color = validityInfoCalibrationColor(headReady, headStatus, headTime);
+      break;
+    case 13:
+      snprintf(output, outputSize, "%s: %s",
+               ui_language == LANG_EN ? "Head type" : "Kopftyp", headTypeTextGet());
+      break;
+    case 14:
+      snprintf(output, outputSize, "%s: %05lu",
+               ui_language == LANG_EN ? "Head SN" : "Kopf-SN",
+               (unsigned long)R.head_serial);
+      break;
+    case 15:
+      validityInfoFormatYmd(headStatus.calibrationDateYmd, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.16s",
+               ui_language == LANG_EN ? "Calibrated" : "Kalibriert", value);
+      break;
+    case 16:
+      validityInfoFormatUtc(headStatus.validFromUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid from" : "Gültig ab", value);
+      break;
+    case 17:
+      validityInfoFormatUtc(headStatus.validUntilUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid until" : "Gültig bis", value);
+      break;
+    case 18:
+      break;
+    case 19:
+      strncpy(output, ui_language == LANG_EN ? "SYSTEM CALIBRATION" : "SYSTEMKALIBRIERUNG", outputSize - 1U);
+      *color = YELLOW;
+      break;
+    case 20:
+      snprintf(output, outputSize, "Status: %.48s",
+               validityInfoSystemText(systemReady, systemStatus, systemTime));
+      *color = validityInfoSystemColor(systemReady, systemStatus, systemTime);
+      break;
+    case 21:
+      validityInfoFormatYmd(systemStatus.calibrationDateYmd, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.16s",
+               ui_language == LANG_EN ? "Calibrated" : "Kalibriert", value);
+      break;
+    case 22:
+      validityInfoFormatUtc(systemStatus.validFromUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid from" : "Gültig ab", value);
+      break;
+    case 23:
+      validityInfoFormatUtc(systemStatus.validUntilUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.24s",
+               ui_language == LANG_EN ? "Valid until" : "Gültig bis", value);
+      break;
+    case 24:
+      if (validityInfoFirmwareApplicability == TP_SYSTEM_FW_APPLICABILITY_EXACT_MATCH)
+        strncpy(output, ui_language == LANG_EN
+            ? "Firmware reference: exact match"
+            : "Firmwarebezug: exakt passend", outputSize - 1U);
+      else if (validityInfoFirmwareApplicability == TP_SYSTEM_FW_APPLICABILITY_CHANGED)
+        strncpy(output, ui_language == LANG_EN
+            ? "Firmware reference: differs"
+            : "Firmwarebezug: abweichend", outputSize - 1U);
+      else
+        strncpy(output, ui_language == LANG_EN
+            ? "Firmware reference: not comparable"
+            : "Firmwarebezug: nicht beurteilbar", outputSize - 1U);
+      *color = validityInfoFirmwareApplicability == TP_SYSTEM_FW_APPLICABILITY_EXACT_MATCH
+          ? GREEN : YELLOW;
+      break;
+    case 25:
+      snprintf(output, outputSize, "%s: %s / %s",
+               ui_language == LANG_EN ? "FW at calibration" : "FW bei Kal.",
+               validityInfoFirmwareContext.firmwareVersion[0] != '\0'
+                 ? validityInfoFirmwareContext.firmwareVersion : "--",
+               validityInfoFirmwareContext.firmwareBuildId[0] != '\0'
+                 ? validityInfoFirmwareContext.firmwareBuildId : "--");
+      break;
+    case 26:
+      strncpy(output, ui_language == LANG_EN
+          ? "FW SHA-256 at calibration:"
+          : "FW-SHA-256 bei Kalibrierung:", outputSize - 1U);
+      break;
+    case 27:
+      validityInfoHashHalf(validityInfoFirmwareContext.firmwareSha256, false, output, outputSize);
+      break;
+    case 28:
+      validityInfoHashHalf(validityInfoFirmwareContext.firmwareSha256, true, output, outputSize);
+      break;
+    case 29:
+      break;
+    case 30:
+      strncpy(output, "FIRMWARE", outputSize - 1U);
+      *color = YELLOW;
+      break;
+    case 31:
+      if (firmwareIntegrity.state == TP_FW_INTEGRITY_MISMATCH)
+        strncpy(output, ui_language == LANG_EN
+            ? "Status: Firmware certificate"
+            : "Status: Firmwarezertifikat", outputSize - 1U);
+      else if (firmwareIntegrity.state == TP_FW_INTEGRITY_VERIFIED)
+        strncpy(output, ui_language == LANG_EN
+            ? "Status: Certificate matches image"
+            : "Status: Zertifikat passt zum Abbild", outputSize - 1U);
+      else if (firmwareIntegrity.state == TP_FW_INTEGRITY_CERTIFICATE_MISSING)
+        strncpy(output, ui_language == LANG_EN
+            ? "Status: No firmware certificate"
+            : "Status: Kein Firmwarezertifikat", outputSize - 1U);
+      else if (firmwareIntegrity.state == TP_FW_INTEGRITY_ERROR)
+        strncpy(output, ui_language == LANG_EN
+            ? "Status: Firmware check failed"
+            : "Status: Firmwareprüfung fehlerhaft", outputSize - 1U);
+      else
+        strncpy(output, ui_language == LANG_EN
+            ? "Status: Firmware check pending"
+            : "Status: Firmwareprüfung ausstehend", outputSize - 1U);
+      *color = tpFirmwareIntegrityVerified() ? GREEN :
+               (firmwareIntegrity.state == TP_FW_INTEGRITY_ERROR ? RED : YELLOW);
+      break;
+    case 32:
+      if (firmwareIntegrity.state == TP_FW_INTEGRITY_MISMATCH)
+        strncpy(output, ui_language == LANG_EN
+            ? "belongs to a different firmware image"
+            : "gehört zu anderem Firmwareabbild", outputSize - 1U);
+      break;
+    case 33:
+      snprintf(output, outputSize, "%s: %s / %s",
+               ui_language == LANG_EN ? "Version / build" : "Version / Build",
+               firmware.version, firmware.buildId);
+      break;
+    case 34:
+      validityInfoFormatYmd(firmware.buildDateYmd, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %.16s",
+               ui_language == LANG_EN ? "Build date" : "Buildtag", value);
+      break;
+    case 35:
+      snprintf(output, outputSize, "%s: %lu Byte",
+               ui_language == LANG_EN ? "Image" : "Firmwareabbild",
+               (unsigned long)firmwareIntegrity.measuredImageSize);
+      break;
+    case 36:
+      strncpy(output, ui_language == LANG_EN ? "Expected SHA-256:" : "Soll-SHA-256:", outputSize - 1U);
+      break;
+    case 37:
+      tpFirmwareIntegrityExpectedHashHex(value, sizeof(value));
+      validityInfoHashHalf(value, false, output, outputSize);
+      break;
+    case 38:
+      tpFirmwareIntegrityExpectedHashHex(value, sizeof(value));
+      validityInfoHashHalf(value, true, output, outputSize);
+      break;
+    case 39:
+      strncpy(output, ui_language == LANG_EN ? "Measured SHA-256:" : "Ist-SHA-256:", outputSize - 1U);
+      break;
+    case 40:
+      tpFirmwareIntegrityMeasuredHashHex(value, sizeof(value));
+      validityInfoHashHalf(value, false, output, outputSize);
+      break;
+    case 41:
+      tpFirmwareIntegrityMeasuredHashHex(value, sizeof(value));
+      validityInfoHashHalf(value, true, output, outputSize);
+      break;
+    case 42:
+      validityInfoFormatUtc(firmwareIntegrity.verifiedUtc, value, sizeof(value));
+      snprintf(output, outputSize, "%s: %s",
+               ui_language == LANG_EN ? "Verified" : "Geprüft", value);
+      break;
+    default:
+      break;
+  }
+  output[outputSize - 1U] = '\0';
+  validityInfoLimitUtf8(output, 42U);
+}
+
+static void FLASHMEM validityInfoDraw(uint8_t firstLine)
+{
+  const uint8_t visibleLines = 14U;
+  validityInfoPrepareFirmwareContext();
+  infoLicenseClearArea();
+
+  tft.setFont(DroidSansMono_16);
+  tft.setTextColor(YELLOW, BLACK);
+  tft.setCursor(160, 30);
+  tpTftPrintUtf8(ui_language == LANG_EN ? "INFO / VALIDITY" : "INFO / GÜLTIGKEIT");
+
+  char counter[20];
+  const uint16_t visibleEnd = (uint16_t)firstLine + (uint16_t)visibleLines;
+  const uint8_t lastVisible = (uint8_t)min((uint16_t)validityInfoLineCount,
+                                           visibleEnd);
+  snprintf(counter, sizeof(counter), "%u-%u/%u",
+           (unsigned)(firstLine + 1U),
+           (unsigned)lastVisible,
+           (unsigned)validityInfoLineCount);
+  tft.setTextColor(CYAN, BLACK);
+  tft.setCursor(565, 32);
+  tft.print(counter);
+
+  tft.setFont(DroidSansMono_14);
+  int16_t y = 72;
+  char line[176];
+  for (uint8_t row = 0; row < visibleLines; row++)
+  {
+    const uint8_t index = (uint8_t)(firstLine + row);
+    if (index >= validityInfoLineCount) break;
+    uint16_t color = WHITE;
+    validityInfoBuildLine(index, line, sizeof(line), &color);
+    tft.setTextColor(color, BLACK);
+    tft.setCursor(160, y);
+    tpTftPrintUtf8(line);
+    y += 23;
+  }
+
+  tft.setTextColor(CYAN, BLACK);
+  tft.setCursor(160, 418);
+  tpTftPrintUtf8(ui_language == LANG_EN
+    ? "UP/DOWN: 2 lines   ENTER/EXIT: back"
+    : "UP/DOWN: 2 Zeilen  ENTER/EXIT: zurück");
+}
+
+void FLASHMEM validity_information_menu(void)
+{
+  static bool frisch = true;
+  static uint8_t firstLine = 0U;
+
+  if (VirtLCDMenu == nullptr || VirtLCDMessage == nullptr) return;
+
+  FirstBut = 0;
+  LastBut = 3;
+  ReadButtons(false);
+
+  if (!flag.config_mode)
+  {
+    frisch = true;
+    firstLine = 0U;
+    TouchZ = false;
+    return;
+  }
+
+  const uint8_t visibleLines = 14U;
+  const uint8_t maxFirstLine = validityInfoLineCount > visibleLines
+                             ? (uint8_t)(validityInfoLineCount - visibleLines)
+                             : 0U;
+  const uint8_t key = menuReadKey(220);
+  if (key == MK_UP)
+  {
+    if (firstLine > 0U)
+    {
+      firstLine = firstLine >= 2U ? (uint8_t)(firstLine - 2U) : 0U;
+      flag.menu_lcd_upd = false;
+    }
+  }
+  else if (key == MK_DOWN)
+  {
+    if (firstLine < maxFirstLine)
+    {
+      const uint16_t next = (uint16_t)firstLine + 2U;
+      firstLine = next < maxFirstLine ? (uint8_t)next : maxFirstLine;
+      flag.menu_lcd_upd = false;
+    }
+  }
+  else if (key == MK_ENTER)
+  {
+    infoLicenseClearArea();
+    frisch = true;
+    firstLine = 0U;
+    menu_level = MENU_MAIN;
+    flag.menu_lcd_upd = false;
+    TouchZ = false;
+    return;
+  }
+
+  if (!flag.menu_lcd_upd || frisch)
+  {
+    frisch = false;
+    flag.menu_lcd_upd = true;
+    VirtLCDMenu->clear();
+    VirtLCDMenu->transfer();
+    VirtLCDMessage->clear();
+    VirtLCDMessage->transfer();
+    validityInfoDraw(firstLine);
+    ReadButtons(true);
   }
 }
 

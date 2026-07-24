@@ -357,17 +357,17 @@ def generate_font_block(font_path: Path, size: int) -> str:
     bits_index, bits_width, bits_height, bits_xoffset, bits_yoffset, bits_delta = widths
     line_space, cap_height = LINE_METRICS[size]
     symbol = f"DroidSansMono_{size}"
-    return f'''static const unsigned char {symbol}_data[] = {{
+    return f'''static const unsigned char {symbol}_data[] PROGMEM = {{
 {format_bytes(data)}
 }};
 /* font data size: {len(data)} bytes */
 
-static const unsigned char {symbol}_index[] = {{
+static const unsigned char {symbol}_index[] PROGMEM = {{
 {format_bytes(index)}
 }};
 /* font index size: {len(index)} bytes */
 
-const ILI9341_t3_font_t {symbol} = {{
+const ILI9341_t3_font_t {symbol} PROGMEM = {{
   {symbol}_index,
   0,
   {symbol}_data,
@@ -442,6 +442,10 @@ def generate_c(root: Path) -> str:
  */
 
 #include "fonts.h"
+
+#ifndef PROGMEM
+#define PROGMEM __attribute__((section(".progmem")))
+#endif
 
 {blocks}
 

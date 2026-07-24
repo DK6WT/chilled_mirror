@@ -162,7 +162,7 @@ static bool FLASHMEM pt100Cal2ValidateStore(const pt100_2p_store_t& st)
   return true;
 }
 
-static bool FLASHMEM pt100Cal2Validate()
+[[maybe_unused]] static bool FLASHMEM pt100Cal2Validate()
 {
   return pt100Cal2ValidateStore(pt100_2p);
 }
@@ -444,7 +444,7 @@ static bool FLASHMEM pt100R0ValidateStore(const pt100_r0_store_t& st)
   return true;
 }
 
-static bool FLASHMEM pt100R0Validate()
+[[maybe_unused]] static bool FLASHMEM pt100R0Validate()
 {
   return pt100R0ValidateStore(pt100_r0);
 }
@@ -621,7 +621,7 @@ static bool FLASHMEM taupunktOffsetValidateStore(const taupunkt_offset_store_t& 
   return true;
 }
 
-static bool FLASHMEM taupunktOffsetValidate()
+[[maybe_unused]] static bool FLASHMEM taupunktOffsetValidate()
 {
   return taupunktOffsetValidateStore(taupunkt_offset);
 }

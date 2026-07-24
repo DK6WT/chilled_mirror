@@ -1,0 +1,16 @@
+{
+  "base_zip": "Taupunktspiegel_StandV1_2026-07-11_V0.50.1_2_TEST_DEVICE_IDENTITY.zip",
+  "micro_ecc_version": "1.0.0",
+  "micro_ecc_commit": "d037ec89546fad14b5c4d5456c2e23a71e554966",
+  "patch_counts": {
+    "asm_arm.inc": 10,
+    "asm_arm_mult_square.inc": 0,
+    "asm_arm_mult_square_umaal.inc": 0,
+    "curve-specific.inc": 33,
+    "platform-specific.inc": 2,
+    "uECC.c": 75
+  },
+  "patched_total": 120,
+  "library_header": "TP3000_uECC.h",
+  "placement": ".flashmem on __IMXRT1062__"
+}

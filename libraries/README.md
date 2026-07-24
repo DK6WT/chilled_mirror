@@ -1,43 +1,39 @@
 # Mitgelieferte lokale Build-Bibliotheken
 
-Dieser Ordner enthält Bibliotheksstände, die direkt aus dem TP-3000-Projektordner
-geladen werden.
+Dieser Ordner enthält die Bibliotheksstände, die für den TP-3000-V0.50.1-Release mitgeführt und gegenüber gleichnamigen globalen Installationen bevorzugt werden sollen.
 
-| Ordner | Version | Ursprung | Lizenz |
+| Ordner | Version | Ursprung | Lizenz des gebündelten Codes |
 |---|---:|---|---|
-| `ProtoCentral_ADS1262_32-bit_precision_ADC_Library` | 2.0.0 | https://github.com/Protocentral/ProtoCentral_ads1262 | MIT |
-| `RTC_RV3129_Arduino_Library` | 1.0.0 | https://github.com/OUIDEAS/SparkFun_RV-3129_Arduino_Library | MIT |
-| `SparkFun_BMP581_Arduino_Library` | 1.0.1 | https://github.com/sparkfun/SparkFun_BMP581_Arduino_Library | MIT |
-| `WDT_T4` | 0.1 | https://github.com/tonton81/WDT_T4 | MIT |
+| `ProtoCentral_ADS1262_32-bit_precision_ADC_Library` | 2.0.0 | ProtoCentral ADS1262 | MIT |
+| `RTC_RV3129_Arduino_Library` | 1.0.0 | OUIDEAS / SparkFun RV-3129 Fork | MIT |
+| `SparkFun_BMP581_Arduino_Library` | 1.0.1 | SparkFun BMP581 | MIT; Bosch-Unterordner BSD-3-Clause |
+| `TP3000_micro_ecc` | 1.0.0-tp3000.1 | micro-ecc / Kenneth MacKay | BSD-2-Clause |
+| `WDT_T4` | 0.1 | Antonio Brewer | MIT |
 
-Die SparkFun-Bibliothek enthält unter `src/bmp5_api/` zusätzlich die Bosch BMP5
-Sensor API. Diese Unterkomponente ist Copyright Bosch Sensortec GmbH und steht
-unter BSD-3-Clause. Der Lizenztext liegt in
-`SparkFun_BMP581_Arduino_Library/src/bmp5_api/LICENSE`.
+Jede Bibliothek enthält ihre eigene Lizenzdatei. Zusätzliche zentrale Kopien und Hinweise liegen unter `../LICENSES/`.
 
-Die WDT_T4-Kopie enthält ihre ursprüngliche MIT-Datei unter
-`WDT_T4/LICENSE`. TP-3000 bindet bevorzugt
-`libraries/WDT_T4/Watchdog_t4.h` ein und kann ersatzweise eine global
-installierte Version verwenden.
+## ProtoCentral ADS1262
 
-Bei den Sensorbibliotheken und bei WDT_T4 wurden nicht benötigte Beispiele,
-Hardware-/CAD-Daten sowie CI-/GitHub-Metadaten entfernt. Die benötigten Quellen,
-Metadaten, README- und Lizenzdateien bleiben erhalten.
+Die gebündelten Softwarequellen stehen unter MIT. Die upstream mitgeführte `LICENSE.md` nennt für separate Hardwareunterlagen CERN-OHL-P v2 und für Dokumentation CC-BY-SA-4.0. Im TP-3000-Paket sind keine ProtoCentral-Hardwaredesigns enthalten; README-/Dokumentationshinweise bleiben mit Original-Lizenzangabe erhalten.
 
-## RA8875-Displaybibliothek
+## RTC RV3129
 
-RA8875 wird **nicht** aus diesem Ordner geladen. Verwendet wird RA8875 0.7.11
-aus der installierten Teensyduino-Umgebung. Für das aktuelle Boardpaket 1.62.0
-lautet der erwartete Pfad:
+Der gebündelte Code steht unter MIT. Die Original-Lizenzdatei enthält zusätzlich den allgemeinen SparkFun-Hinweis für Hardwareunterlagen; solche Hardwaredateien sind hier nicht enthalten.
 
-```text
-Arduino15/packages/teensy/hardware/avr/1.62.0/libraries/RA8875
-```
+## SparkFun BMP581 und Bosch BMP5 API
 
-Autor: Max MC Costa / sumotoy. Lizenz: GPL-3.0-or-later. Die Bibliothek wird im
-TP-3000-Paket nicht doppelt verteilt. Siehe
-`../LICENSES/RA8875-NOTICE.txt` und `../THIRD_PARTY_NOTICES.md`.
+Die SparkFun-Wrapperdateien stehen unter MIT. Der Unterordner `src/bmp5_api/` stammt von Bosch Sensortec und steht separat unter BSD-3-Clause. Dessen Original-Lizenzdatei bleibt direkt im Unterordner erhalten.
 
-Weitere Kernbibliotheken wie NativeEthernet, FNET, Time, Metro, SD, SdFat, SPI,
-Wire und EEPROM kommen ebenfalls aus der installierten Teensyduino-/Arduino-
-Umgebung und behalten ihre eigenen Urheber- und Lizenzbedingungen.
+Die generische SparkFun-`LICENSE.md` erwähnt außerdem eine Analog-Devices-SLA für andere Bibliotheksinhalte. Im tatsächlich gebündelten BMP581-Quellbaum wurden keine Analog-Devices-Dateien gefunden; maßgeblich sind die SparkFun-MIT- und Bosch-BSD-3-Clause-Hinweise in den betroffenen Dateien.
+
+## TP3000 micro-ecc
+
+Projektlokale P-256-/ECDSA-Abhängigkeit unter BSD-2-Clause. Die TP-3000-Integration beschränkt Konfiguration und Codeplatzierung auf den benötigten Funktionsumfang. Die Original-Lizenz liegt in `TP3000_micro_ecc/LICENSE.txt`.
+
+## WDT_T4
+
+Die MIT-lizenzierte lokale Kopie enthält die für den Build benötigten Header/Template-Dateien und die upstream mitgelieferten Beispiele. Der TP-3000-Code kann ersatzweise eine global installierte Version finden; für reproduzierbare Releases ist die lokale Fassung vorgesehen.
+
+## Externe Toolchain-Bibliotheken
+
+RA8875 wird nicht doppelt gebündelt. Vorgesehen ist die Version aus der installierten Teensyduino-Umgebung. Ebenso kommen Arduino Core, EEPROM, Entropy, Metro, NativeEthernet/FNET, SD/SdFat, SPI, TimeLib und Wire aus Arduino/Teensyduino und behalten ihre eigenen Lizenzbedingungen.

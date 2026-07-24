@@ -1,7 +1,7 @@
 /*
  * TP-3000 Taupunktspiegel-Hygrometer
  * Datei: TPheadCalibration.ino
- * Zweck: SD-Speichern/Laden der geraete- und kopfspezifischen Kopfkalibrierung.
+ * Zweck: SD-Speichern/Laden der geraete- und kopfspezifischen Kopfjustierung.
  *
  * Copyright (C) 2025-2026 S. Brachtl (DK6WT)
  * SPDX-License-Identifier: GPL-3.0-only
@@ -16,6 +16,7 @@
 #include <math.h>
 #include "TP_T.h"
 #include "EEPROMAnything.h"
+#include "TPsignedCalibration.h"
 
 extern var_t R;
 extern void fanApplyNormalSpeed(void);
@@ -208,8 +209,9 @@ static void FLASHMEM headCalCurrentData(const char* headTypeText, uint32_t headS
 
   const int8_t profile = headTypeProfileFromText(typeText);
   d->head_type = (profile >= 0) ? (uint8_t)profile : HEAD_TYPE_DEFAULT;
-  strncpy(d->head_type_text, typeText, sizeof(d->head_type_text) - 1U);
-  d->head_type_text[sizeof(d->head_type_text) - 1U] = '\0';
+  const size_t typeLength = strnlen(typeText, sizeof(d->head_type_text) - 1U);
+  memcpy(d->head_type_text, typeText, typeLength);
+  d->head_type_text[typeLength] = '\0';
   d->head_serial = headSerial;
   strncpy(d->device_sn, deviceSerialGet(), sizeof(d->device_sn) - 1U);
   d->device_sn[sizeof(d->device_sn) - 1U] = '\0';
@@ -309,6 +311,7 @@ static bool FLASHMEM headCalApplyData(const head_cal_data_t* d)
   peltierCurrentLimitSetMa(d->peltier_current_limit_ma);
   fanApplyNormalSpeed();
   tpMainConfigSave();
+  tpSignedCalibrationInvalidateCache();
   return true;
 }
 
@@ -418,6 +421,7 @@ bool FLASHMEM headCalSave(const char* headTypeText, uint32_t headSerial, char* m
   headTypeTextSet(d.head_type_text);
   R.head_serial = d.head_serial;
   tpMainConfigSave();
+  tpSignedCalibrationInvalidateCache();
 
   if (message) snprintf(message, messageSize, "Gespeichert: %s K%05lu",
                       d.head_type_text,
@@ -546,8 +550,9 @@ uint8_t FLASHMEM headCalListTypes(char types[][HEAD_TYPE_TEXT_LEN + 1U], uint8_t
         for (uint8_t i=0;i<count;i++) if (strncmp(types[i], ht, HEAD_TYPE_TEXT_LEN) == 0) exists=true;
         if (!exists && count < maxCount)
         {
-          strncpy(types[count], ht, HEAD_TYPE_TEXT_LEN);
-          types[count][HEAD_TYPE_TEXT_LEN] = '\0';
+          const size_t typeLength = strnlen(ht, HEAD_TYPE_TEXT_LEN);
+          memcpy(types[count], ht, typeLength);
+          types[count][typeLength] = '\0';
           count++;
         }
       }

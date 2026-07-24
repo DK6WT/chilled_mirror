@@ -29,6 +29,7 @@
 // Externe Objekte aus deiner main.cpp
 extern uint16_t menu_level;
 extern var_t R;
+extern uint8_t led_autoadaptation_mode;
 extern char lcd_buf[];
 
 // =========================================================================
@@ -136,6 +137,8 @@ void FLASHMEM peltier_current_limit_menu(void);
 void FLASHMEM optik_sollwert_menu(void);
 void FLASHMEM freiheiz_temp_menu(void);
 void FLASHMEM autocal_interval_menu(void);
+void FLASHMEM led_autoadaptation_mode_menu(void);
+void FLASHMEM led_learning_reset_menu(void);
 void FLASHMEM adc_filter_mode_menu(void);
 void FLASHMEM adc1_sfocal_mode_menu(void);
 void FLASHMEM fan_speed_menu(void);
@@ -190,6 +193,10 @@ void FLASHMEM display_main_layout_menu(void);
 void FLASHMEM display_loop_debug_menu(void);
 void FLASHMEM info_license_menu(void);
 void FLASHMEM status_information_menu(void);
+void FLASHMEM validity_information_menu(void);
+void FLASHMEM calibration_certificate_qr_menu(void);
+void FLASHMEM signed_calibration_menu(void);
+void FLASHMEM signed_calibration_action_menu(void);
 void FLASHMEM interfaces_menu(void);
 void FLASHMEM interface_placeholder_menu(TextId title);
 void FLASHMEM alarm_haupt_menu(void);
@@ -235,6 +242,7 @@ void FLASHMEM interface_sd_output_filter_menu(void);
 void FLASHMEM interface_sd_interval_menu(void);
 void FLASHMEM interface_sd_diagnostic_data_menu(void);
 void FLASHMEM interface_sd_header_menu(void);
+void FLASHMEM interface_sd_log_integrity_menu(void);
 void FLASHMEM interface_output_interval_menu(void);
 void FLASHMEM interface_output_filter_menu(void);
 void FLASHMEM interface_diagnostic_data_menu(void);
@@ -309,6 +317,7 @@ enum
   MENU_LOOP_DEBUG_DISPLAY   = 43,
   MENU_STATUS_INFO          = 44,
   MENU_MAIN_SCREEN_LAYOUT   = 45,
+  MENU_VALIDITY_INFO        = 46,
 
   MENU_DEVICE_STORAGE       = 109,
   MENU_DEVICE_STORAGE_STATUS= 110,
@@ -366,6 +375,16 @@ enum
   MENU_SD_OUTPUT_INTERVAL   = 83,
   MENU_SD_OUTPUT_FILTER     = 84,
   MENU_SD_DIAGNOSTIC_DATA   = 85,
+  MENU_SD_LOG_INTEGRITY      = 124,
+  MENU_LED_AUTOADAPTATION     = 125,
+  MENU_LED_LEARNING_RESET     = 126,
+  MENU_CAL_CERT_QR             = 127,
+
+  MENU_SIGNED_CALIBRATION    = 130,
+  MENU_SIGNED_CAL_DEVICE_REQ = 131,
+  MENU_SIGNED_CAL_HEAD_REQ   = 132,
+  MENU_SIGNED_CAL_DEVICE_IMP = 133,
+  MENU_SIGNED_CAL_HEAD_IMP   = 134,
 
   MENU_RS232_1_OUTPUT       = 75,
   MENU_RS232_1_INTERVAL     = 76,
@@ -465,6 +484,7 @@ void applySensorHeadProfile(uint8_t head_type)
 static bool control_params_unlocked = false;
 static var_t control_params_backup;
 static uint16_t control_params_backup_peltier_ma = PELTIER_CURRENT_LIMIT_DEFAULT_MA;
+static uint8_t control_params_backup_led_mode = LED_AUTOADAPT_DEFAULT;
 
 bool controlParamsEditUnlocked(void)
 {
@@ -480,6 +500,7 @@ void controlParamsBeginEdit(void)
 {
   control_params_backup = R;
   control_params_backup_peltier_ma = peltierCurrentLimitGetMa();
+  control_params_backup_led_mode = led_autoadaptation_mode;
   control_params_unlocked = true;
 }
 
@@ -488,6 +509,7 @@ void controlParamsSaveAndLock(void)
   tpMainConfigSave();
   control_params_backup = R;
   control_params_backup_peltier_ma = peltierCurrentLimitGetMa();
+  control_params_backup_led_mode = led_autoadaptation_mode;
   control_params_unlocked = false;
 }
 
@@ -495,6 +517,7 @@ void controlParamsDiscardAndLock(void)
 {
   R = control_params_backup;
   peltierCurrentLimitSetMa(control_params_backup_peltier_ma);
+  led_autoadaptation_mode = control_params_backup_led_mode;
   fanApplyNormalSpeed();
   control_params_unlocked = false;
 }
@@ -503,6 +526,7 @@ void controlParamsLockOnly(void)
 {
   control_params_backup = R;
   control_params_backup_peltier_ma = peltierCurrentLimitGetMa();
+  control_params_backup_led_mode = led_autoadaptation_mode;
   control_params_unlocked = false;
 }
 
@@ -510,10 +534,12 @@ void controlParamsLockOnly(void)
 // MENÜEINTRÄGE
 // =========================================================================
 
-const uint8_t level0_menu_size = 13;
+const uint8_t level0_menu_size = 15;
 const TextId level0_menu_items[] = {
   TXT_MENU_CONTROL_PARAMETERS,
   TXT_MENU_STATUS_INFO,
+  TXT_SIGNED_CAL_STATUS,
+  TXT_MENU_CAL_CERT_QR,
   TXT_MENU_ALARM,
   TXT_MENU_FAN_SPEED,
   TXT_MENU_SENSOR_HEAD,
@@ -533,6 +559,8 @@ const TextId level0_menu_items[] = {
 const uint16_t level0_menu_next[] = {
   MENU_CONTROL_PARAMETERS,   // Regelparameter
   MENU_STATUS_INFO,          // Status Information
+  MENU_VALIDITY_INFO,         // Info / Gueltigkeit
+  MENU_CAL_CERT_QR,            // Kalibrierschein-QR am TFT
   MENU_ALARM,                // Alarm
   MENU_FAN_SPEED,            // Fan-Speed
   MENU_SENSOR_HEAD,          // Sensorkopf
@@ -601,7 +629,7 @@ const uint16_t interfaces_sub_menu_next[] = {
   MENU_MAIN
 };
 
-const uint8_t regler_sub_menu_size = 11;
+const uint8_t regler_sub_menu_size = 13;
 const TextId regler_sub_menu_items[] = {
   TXT_EMPTY,  // Peltier Maxstrom (dynamischer Klartext)
   TXT_MENU_PID_KP,
@@ -611,6 +639,8 @@ const TextId regler_sub_menu_items[] = {
   TXT_MENU_OPTIK_TARGET,
   TXT_MENU_FREIHEIZ_TEMP,
   TXT_MENU_AUTOCAL_INTERVAL,
+  TXT_EMPTY,  // LED-Autoadaption (dynamischer Klartext)
+  TXT_EMPTY,  // LED-Lerndaten zuruecksetzen
   TXT_MENU_ADC_FILTER_MODE,
   TXT_MENU_ADC1_SFOCAL_MODE,
   TXT_BACK
@@ -625,14 +655,17 @@ const uint16_t regler_sub_menu_next[] = {
   MENU_OPTIK_TARGET,        // Optik-Zielwert
   MENU_FREIHEIZ_TEMP,       // Freiheiztemperatur
   MENU_AUTOCAL_INTERVAL,    // Auto-Cal Intervall
+  MENU_LED_AUTOADAPTATION,  // LED-Temperaturvorsteuerung
+  MENU_LED_LEARNING_RESET,  // Lerndaten des aktuellen Kopfes loeschen
   MENU_ADC_FILTER_MODE,     // ADC/Pt100-Messfilter
   MENU_ADC1_SFOCAL_MODE,    // ADC1 SFOCAL
   MENU_MAIN                 // Zurueck
 };
 
 
-const uint8_t kalibrierung_menu_size = 6;
+const uint8_t kalibrierung_menu_size = 7;
 const TextId kalibrierung_menu_items[] = {
+  TXT_MENU_SIGNED_CALIBRATION,
   TXT_MENU_PT100_R0,
   TXT_MENU_PT100_2POINT,
   TXT_MENU_REF_EXT_AUTO,    // automatischer externer 4R-Abgleich
@@ -642,12 +675,30 @@ const TextId kalibrierung_menu_items[] = {
 };
 
 const uint16_t kalibrierung_menu_next[] = {
+  MENU_SIGNED_CALIBRATION,
   MENU_SENSOR_R0_SELECT,    // Pt100 R0 Sensorwahl
   MENU_PT100_2P_SELECT,     // Pt100 2-Punkt Sensorwahl
   MENU_REF_EXT_AUTO,        // automatischer externer 4R-Abgleich
   MENU_REF_VALUES,          // Ref-/Kanalwerte manuell editieren
   MENU_TAUPOINT_OFFSET,     // Taupunkt-/Frostpunkt-Offset
   MENU_MAIN                 // Zurueck
+};
+
+const uint8_t signed_calibration_menu_size = 5;
+const TextId signed_calibration_menu_items[] = {
+  TXT_SIGNED_CAL_DEVICE_REQUEST,
+  TXT_SIGNED_CAL_HEAD_REQUEST,
+  TXT_SIGNED_CAL_DEVICE_IMPORT,
+  TXT_SIGNED_CAL_HEAD_IMPORT,
+  TXT_BACK
+};
+
+const uint16_t signed_calibration_menu_next[] = {
+  MENU_SIGNED_CAL_DEVICE_REQ,
+  MENU_SIGNED_CAL_HEAD_REQ,
+  MENU_SIGNED_CAL_DEVICE_IMP,
+  MENU_SIGNED_CAL_HEAD_IMP,
+  MENU_CALIBRATION
 };
 
 const uint8_t pt100_2p_wahl_menu_size = 3;
@@ -1305,6 +1356,14 @@ void ConfigMenu(void)
       autocal_interval_menu();
       break;
 
+    case MENU_LED_AUTOADAPTATION:
+      led_autoadaptation_mode_menu();
+      break;
+
+    case MENU_LED_LEARNING_RESET:
+      led_learning_reset_menu();
+      break;
+
     case MENU_ADC_FILTER_MODE:
       adc_filter_mode_menu();
       break;
@@ -1412,6 +1471,14 @@ void ConfigMenu(void)
 
     case MENU_STATUS_INFO:
       status_information_menu();
+      break;
+
+    case MENU_VALIDITY_INFO:
+      validity_information_menu();
+      break;
+
+    case MENU_CAL_CERT_QR:
+      calibration_certificate_qr_menu();
       break;
 
     // Schnittstellen
@@ -1623,9 +1690,24 @@ void ConfigMenu(void)
       interface_sd_header_menu();
       break;
 
+    case MENU_SD_LOG_INTEGRITY:
+      interface_sd_log_integrity_menu();
+      break;
+
     // Kalibrierung
     case MENU_CALIBRATION:
       kalibrierung_haupt_menu();
+      break;
+
+    case MENU_SIGNED_CALIBRATION:
+      signed_calibration_menu();
+      break;
+
+    case MENU_SIGNED_CAL_DEVICE_REQ:
+    case MENU_SIGNED_CAL_HEAD_REQ:
+    case MENU_SIGNED_CAL_DEVICE_IMP:
+    case MENU_SIGNED_CAL_HEAD_IMP:
+      signed_calibration_action_menu();
       break;
 
     case MENU_SENSOR_R0_SELECT:

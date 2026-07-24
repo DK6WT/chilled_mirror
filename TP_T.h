@@ -54,6 +54,13 @@ typedef struct {
 #define HEAD_SERIAL_MAX     99999UL
 #define HEAD_SERIAL_DEFAULT 0UL
 
+// LED-Autoadaption: 0=Aus, 1=System-/Hersteller-Grundkurve, 2=Grundkurve + Lerndaten.
+#define LED_AUTOADAPT_OFF       0U
+#define LED_AUTOADAPT_BASE      1U
+#define LED_AUTOADAPT_SELF      2U
+#define LED_AUTOADAPT_MAX       LED_AUTOADAPT_SELF
+#define LED_AUTOADAPT_DEFAULT   LED_AUTOADAPT_BASE
+
 #define DEVICE_SERIAL_DIGITS  5U
 #define DEVICE_SERIAL_DEFAULT "00000"
 
@@ -61,12 +68,58 @@ bool deviceSerialNormalize(char* text, size_t textSize);
 bool deviceSerialSet(const char* text);
 const char* deviceSerialGet(void);
 
+// Kryptografische Geraeteidentitaet / Test-Provisionierung ab V0.50.1.
+void deviceIdentityBegin(void);
+bool deviceIdentityHasKey(void);
+bool deviceIdentityCertificateValid(void);
+bool deviceIdentityCertificateStoredInvalid(void);
+const char* deviceIdentityCertifiedSerial(void);
+const char* deviceIdentityDeviceKeyId(void);
+const char* deviceIdentityRootKeyId(void);
+const char* deviceIdentityLastCertificateFile(void);
+const char* deviceIdentityStatusText(void);
+bool deviceIdentityGenerateKey(const char* confirmedSerial,
+                               char* errorText, size_t errorTextSize);
+bool deviceIdentityBuildRequestJson(char* output, size_t outputSize,
+                                    size_t* outputLength,
+                                    char* downloadName, size_t downloadNameSize,
+                                    char* errorText, size_t errorTextSize);
+bool deviceIdentitySaveRequestToSd(const char* json, size_t jsonLength,
+                                   const char* downloadName,
+                                   char* storedPath, size_t storedPathSize,
+                                   char* errorText, size_t errorTextSize);
+bool deviceIdentityImportCertificateFromSd(char* importedPath,
+                                            size_t importedPathSize,
+                                            char* errorText,
+                                            size_t errorTextSize);
+// Hilfsfunktionen fuer signierte Kalibrier- und Logdaten.
+bool deviceIdentitySignHash(const uint8_t hash[32], uint8_t signature[64]);
+bool deviceIdentityRandomBytes(uint8_t* output, size_t outputLength);
+bool deviceIdentityVerifyRootSignedHash(const uint8_t hash[32],
+                                        const uint8_t signature[64]);
+bool deviceIdentityVerifyDeviceSignedHash(const uint8_t hash[32],
+                                          const uint8_t signature[64]);
+const char* deviceIdentityCertificateSerialText(void);
+int64_t deviceIdentityCertificateIssuedUtc(void);
+bool deviceIdentityCertificateManifestHash(uint8_t output[32]);
+bool deviceIdentityBuildCertificateJson(char* output,
+                                        size_t outputSize,
+                                        size_t* outputLength);
+
 // Bereinigte EEPROM-Hauptkonfiguration ab V0.50.0_18.
 bool tpMainConfigLoad(void);
 void tpMainConfigSave(void);
 void tpMainConfigFactoryReset(void);
 void tpDeviceUiConfigLoad(void);
 void tpDeviceUiConfigSave(void);
+
+// Die Geräte-RTC bleibt absichtlich in lokaler Bedienzeit. Für kryptografische
+// Zeitstempel wird der beim PC-Zeitsync übertragene UTC-Offset separat
+// gespeichert und von der lokalen RTC-Zeit abgezogen.
+bool tpUtcOffsetValid(void);
+int16_t tpUtcOffsetMinutesGet(void);
+bool tpUtcOffsetSetMinutes(int16_t minutes);
+int64_t tpCurrentUtcUnixTime(void);
 
 bool headTypeTextValid(const char* text);
 bool headTypeTextNormalize(char* text, size_t textSize);

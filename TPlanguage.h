@@ -47,6 +47,7 @@ enum TextId : uint16_t
   TXT_MAIN_T_MIRROR,
   TXT_MAIN_T_AMBIENT,
   TXT_MAIN_SETUP,
+  TXT_MAIN_INFO,
   TXT_MAIN_STATUS_SAFETY,
   TXT_MAIN_STATUS_SD_LOGGING,
   TXT_MENU_MAIN_TITLE,
@@ -82,6 +83,13 @@ enum TextId : uint16_t
   TXT_MENU_ADC_FILTER_MODE,
   TXT_MENU_ADC1_SFOCAL_MODE,
   TXT_MENU_CAL_TITLE,
+  TXT_MENU_SIGNED_CALIBRATION,
+  TXT_SIGNED_CAL_TITLE,
+  TXT_SIGNED_CAL_STATUS,
+  TXT_SIGNED_CAL_DEVICE_REQUEST,
+  TXT_SIGNED_CAL_HEAD_REQUEST,
+  TXT_SIGNED_CAL_DEVICE_IMPORT,
+  TXT_SIGNED_CAL_HEAD_IMPORT,
   TXT_MENU_PT100_R0,
   TXT_MENU_PT100_2POINT,
   TXT_MENU_REF_100_120,
@@ -263,6 +271,7 @@ enum TextId : uint16_t
   TXT_DISPLAY_MAIN_LAYOUT_TITLE,
   TXT_DISPLAY_MAIN_LAYOUT_STANDARD,
   TXT_DISPLAY_MAIN_LAYOUT_THREE_VALUES,
+  TXT_MENU_CAL_CERT_QR,
   TXT_COUNT
 };
 
@@ -300,6 +309,7 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "T-Spiegel :",
     "T-Umgebung:",
     "SETUP",
+    "INFO",
     "Safety",
     "SD-Logging",
     "--- TAUPUNKTSPIEGEL SETUP ---",
@@ -335,6 +345,13 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "Messfilter",
     "ADC1 SFOCAL",
     "--- KALIBRIERUNG ---",
+    "Signierte Kalibrierung",
+    "--- SIGNIERTE KALIBRIERUNG ---",
+    "Info / Gültigkeit",
+    "Geräte-Anfrage auf SD",
+    "Kopf-Anfrage auf SD",
+    "Gerätefreigabe importieren",
+    "Kopfzertifikat importieren",
     "Pt100 R0",
     "Pt100 2-Punkt",
     "Ref Low / High",
@@ -514,8 +531,9 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "Kopf: %s SN %05lu",
     "Hauptscreen Layout",
     "--- HAUPTSCREEN LAYOUT ---",
-    "Standard",
-    "3 Werte"
+    "2 Werte",
+    "3 Werte",
+    "Kalibrierschein anzeigen"
   },
 
   // ---------------------------------------------------------------------------
@@ -527,6 +545,7 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "T-Mirror  :",
     "T-Ambient :",
     "SETUP",
+    "INFO",
     "Safety",
     "SD-Logging",
     "--- DEW POINT MIRROR SETUP ---",
@@ -562,6 +581,13 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "Measurement filter",
     "ADC1 SFOCAL",
     "--- CALIBRATION ---",
+    "Signed calibration",
+    "--- SIGNED CALIBRATION ---",
+    "Info / validity",
+    "Device request to SD",
+    "Head request to SD",
+    "Import device approval",
+    "Import head certificate",
     "Pt100 R0",
     "Pt100 2-point",
     "Ref Low / High",
@@ -741,8 +767,9 @@ static const char* const textTable[LANG_COUNT][TXT_COUNT] =
     "Head: %s SN %05lu",
     "Main screen layout",
     "--- MAIN SCREEN LAYOUT ---",
-    "Standard",
-    "3 values"
+    "2 values",
+    "3 values",
+    "Show calibration QR"
   }
 };
 

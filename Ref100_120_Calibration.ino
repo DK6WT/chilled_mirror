@@ -33,6 +33,7 @@
 #include "TP_T.h"
 
 extern var_t R;
+extern void tpSignedCalibrationInvalidateCache(void);
 
 
 // ============================================================================
@@ -101,8 +102,8 @@ typedef struct
 static_assert(sizeof(ref_cal_slot_t) <= REF_CAL_SLOT_SIZE,
               "Ref EEPROM slot too small");
 
-static uint32_t ref_cal_sequence = 0UL;
-static uint8_t  ref_cal_active_slot = 0U;
+[[maybe_unused]] static uint32_t ref_cal_sequence = 0UL;
+[[maybe_unused]] static uint8_t  ref_cal_active_slot = 0U;
 
 static int FLASHMEM refCalSlotAddr(uint8_t slot)
 {
@@ -235,12 +236,12 @@ static bool FLASHMEM refCalValidateStore(const ref_cal_store_t& st)
   return true;
 }
 
-static bool FLASHMEM refCalValidate()
+[[maybe_unused]] static bool FLASHMEM refCalValidate()
 {
   return refCalValidateStore(ref_cal);
 }
 
-static bool FLASHMEM refCalReadSlot(uint8_t slot, ref_cal_slot_t& out)
+[[maybe_unused]] static bool FLASHMEM refCalReadSlot(uint8_t slot, ref_cal_slot_t& out)
 {
   EEPROM.get(refCalSlotAddr(slot), out);
   if (out.magic != REF_CAL_SLOT_MAGIC) return false;
@@ -252,7 +253,7 @@ static bool FLASHMEM refCalReadSlot(uint8_t slot, ref_cal_slot_t& out)
   return refCalValidateStore(out.payload);
 }
 
-static bool FLASHMEM refCalValidateV2(const void* old_cal_ptr)
+[[maybe_unused]] static bool FLASHMEM refCalValidateV2(const void* old_cal_ptr)
 {
   const ref_cal_store_v2_t& old_cal = *(const ref_cal_store_v2_t*)old_cal_ptr;
   if (old_cal.magic != REF_CAL_MAGIC) return false;
@@ -272,7 +273,7 @@ static bool FLASHMEM refCalValidateV2(const void* old_cal_ptr)
 }
 
 // Alte EEPROM-Version 1 nutzte Ohm * 10000.
-static bool FLASHMEM refCalValidateV1(const void* old_cal_ptr)
+[[maybe_unused]] static bool FLASHMEM refCalValidateV1(const void* old_cal_ptr)
 {
   const ref_cal_store_v2_t& old_cal = *(const ref_cal_store_v2_t*)old_cal_ptr;
   if (old_cal.magic != REF_CAL_MAGIC) return false;
@@ -633,6 +634,10 @@ void FLASHMEM tpMetrologyConfigSave(void)
   tp_metrology_sequence = nextSeq;
   tp_metrology_active_slot = targetSlot;
   tp_metrology_loaded = true;
+  // R0, 2-Punkt-Korrektur, Referenz-/Kanalkorrektur und Taupunktoffset
+  // sind kalibrierrelevant. Der Vergleich erzeugt nur bei einer tatsächlichen
+  // Abweichung zum aktuell gebundenen Schein einen SD-Endeintrag.
+  tpSignedCalibrationInvalidateCache();
 }
 
 void FLASHMEM tpMetrologyConfigEnsureLoaded(void)

@@ -24,6 +24,7 @@
 
 #include <EEPROM.h>
 #include <string.h>
+#include "TPsignedData.h"
 
 // Selten benutzte Setup-/EEPROM-Hilfsfunktionen laufen aus Flash,
 // damit der zeitkritische ITCM-Bereich fuer Loop, Regelung und Safety frei bleibt.
@@ -113,7 +114,8 @@ extern void ethernetServiceApplyNow(void);
 
 #define IF_SD_INTERVAL_COUNT    4
 #define IF_CFG_MAGIC            0x54494635UL   // 'TIF5'
-#define IF_CFG_VERSION          11
+#define IF_CFG_VERSION          12
+#define IF_CFG_PREVIOUS_VERSION 11
 
 static const uint32_t interfaceBaudTable[IF_BAUD_COUNT] = {
   9600UL,
@@ -206,8 +208,21 @@ typedef struct {
   uint8_t  wincontrol_baud_index;    // RS232-Baudrate fuer WinControl-Ausgabe
   uint8_t  wincontrol_cycle_index;   // S2/S3-Ausgabezyklus
 
+  // V12 nutzt das bisherige Padding-Byte vor CRC. Dadurch bleiben Groesse und
+  // CRC-Position des V11-Payloads unveraendert und die A/B-Slots migrierbar.
+  uint8_t  sd_log_integrity_mode;    // 0=Aus, 1=SHA-256, 2=CSV zertifiziert, 3=TPLOG zertifiziert
+
   uint32_t crc;
 } interface_config_t;
+
+// Die V11->V12-Migration setzt voraus, dass genau das bisherige Padding-Byte
+// verwendet wird. Diese Compile-Zeit-Pruefungen verhindern eine unbemerkte
+// Layoutaenderung durch spaetere Felder oder Compileroptionen.
+static_assert(sizeof(interface_config_t) == 72U,
+              "interface_config_t layout changed; update EEPROM migration");
+static_assert(offsetof(interface_config_t, sd_log_integrity_mode) + 1U ==
+              offsetof(interface_config_t, crc),
+              "SD integrity byte must remain directly before interface CRC");
 
 // EEPROM-Migrationsabbild des unmittelbar vorherigen V8-Formats.
 // V8 kennt die zweikanalige ALMEMO-Eingabe, aber noch keine WinControl-Ausgabe.
@@ -416,7 +431,7 @@ static uint32_t INTERFACE_FLASHMEM_NOINLINE interfaceConfigCrc(void)
 static bool INTERFACE_FLASHMEM_NOINLINE interfaceConfigPayloadValid(const interface_config_t& cfg)
 {
   if (cfg.magic != IF_CFG_MAGIC) return false;
-  if (cfg.version != IF_CFG_VERSION) return false;
+  if (cfg.version != IF_CFG_VERSION && cfg.version != IF_CFG_PREVIOUS_VERSION) return false;
   const uint32_t crc = interfaceConfigCrcBytes(&cfg, sizeof(interface_config_t) - sizeof(uint32_t));
   return (cfg.crc == crc);
 }
@@ -434,7 +449,7 @@ static bool INTERFACE_FLASHMEM_NOINLINE interfaceConfigReadSlot(uint8_t slot, in
 
 static int INTERFACE_FLASHMEM_NOINLINE interfaceConfigEepromAddr(void)
 {
-  // Nur noch fuer die nicht mehr aufgerufenen alten Migrationshelfer vorhanden.
+  // Legacy-Einzelblockadresse fuer die CRC-gepruefte Migration von V5 bis V8.
   return IF_CFG_SLOT_A_ADDR;
 }
 
@@ -513,6 +528,8 @@ static void INTERFACE_FLASHMEM_NOINLINE interfaceConfigSetDefaults(void)
   interface_cfg.wincontrol_baud_index = 0;      // 9600 Baud
   interface_cfg.wincontrol_cycle_index = IF_WINCONTROL_CYCLE_20S;
 
+  interface_cfg.sd_log_integrity_mode = TP_LOG_INTEGRITY_OFF;
+
   interface_cfg.crc = interfaceConfigCrc();
 }
 
@@ -553,26 +570,6 @@ static bool INTERFACE_FLASHMEM_NOINLINE interfaceIpSameSubnet(const uint8_t a[4]
 {
   const uint32_t ma = interfaceIpToU32(mask);
   return (interfaceIpToU32(a) & ma) == (interfaceIpToU32(b) & ma);
-}
-
-static void INTERFACE_FLASHMEM_NOINLINE interfaceSetDefaultIpFields(void)
-{
-  interface_cfg.eth_ip[0] = 192;
-  interface_cfg.eth_ip[1] = 168;
-  interface_cfg.eth_ip[2] = 0;
-  interface_cfg.eth_ip[3] = 50;
-  interface_cfg.eth_subnet[0] = 255;
-  interface_cfg.eth_subnet[1] = 255;
-  interface_cfg.eth_subnet[2] = 255;
-  interface_cfg.eth_subnet[3] = 0;
-  interface_cfg.eth_gateway[0] = 192;
-  interface_cfg.eth_gateway[1] = 168;
-  interface_cfg.eth_gateway[2] = 0;
-  interface_cfg.eth_gateway[3] = 1;
-  interface_cfg.eth_dns[0] = 8;
-  interface_cfg.eth_dns[1] = 8;
-  interface_cfg.eth_dns[2] = 8;
-  interface_cfg.eth_dns[3] = 8;
 }
 
 static bool INTERFACE_FLASHMEM_NOINLINE interfaceStaticIpConfigValid(void)
@@ -690,6 +687,10 @@ static void INTERFACE_FLASHMEM_NOINLINE interfaceConfigSanitize(void)
   }
   interfaceClampSdWriteIntervalToOutput();
   interface_cfg.sd_header_enabled = interface_cfg.sd_header_enabled ? 1 : 0;
+  if (interface_cfg.sd_log_integrity_mode >= TP_LOG_INTEGRITY_COUNT)
+  {
+    interface_cfg.sd_log_integrity_mode = TP_LOG_INTEGRITY_OFF;
+  }
   if (interface_cfg.flow_display_mode >= IF_FLOW_DISPLAY_COUNT)
   {
     interface_cfg.flow_display_mode = IF_FLOW_DISPLAY_OFF;
@@ -1011,6 +1012,22 @@ void interfaceConfigLoad(void)
   {
     interface_cfg_sequence = 0UL;
     interface_cfg_active_slot = 0U;
+
+    // Vor dem Rueckfall auf Werkseinstellungen die noch vorhandenen, CRC-
+    // geschuetzten Einzelblockformate V8 bis V5 uebernehmen. Die Helfer
+    // schreiben den ersten aktuellen A/B-Slot; der zweite Save stellt die
+    // Redundanz unmittelbar wieder her.
+    const bool migrated = interfaceConfigTryMigrateV8() ||
+                          interfaceConfigTryMigrateV7() ||
+                          interfaceConfigTryMigrateV6() ||
+                          interfaceConfigTryMigrateV5();
+    if (migrated)
+    {
+      interfaceConfigSave();
+      interface_cfg_loaded = true;
+      return;
+    }
+
     interfaceConfigSetDefaults();
     // Erstinitialisierung: beide A/B-Slots direkt anlegen.
     interfaceConfigSave();
@@ -1035,6 +1052,15 @@ void interfaceConfigLoad(void)
   interface_cfg = best->payload;
   interface_cfg_sequence = best->sequence;
   interface_cfg_active_slot = bestSlot;
+
+  // V11 hatte an derselben Byteposition lediglich ein durch memset() auf null
+  // gesetztes Padding-Byte. Erst nach erfolgreicher alter CRC-Pruefung wird es
+  // als neuer Integritaetsmodus initialisiert.
+  const bool migratedFromV11 = interface_cfg.version == IF_CFG_PREVIOUS_VERSION;
+  if (migratedFromV11)
+  {
+    interface_cfg.sd_log_integrity_mode = TP_LOG_INTEGRITY_OFF;
+  }
   interfaceConfigSanitize();
 
   // Falls Sanitize Werte repariert hat, wird der zweite Slot sauber aktualisiert.
@@ -1042,7 +1068,14 @@ void interfaceConfigLoad(void)
   interface_cfg.version = IF_CFG_VERSION;
   const uint32_t oldCrc = interface_cfg.crc;
   interface_cfg.crc = interfaceConfigCrc();
-  if (interface_cfg.crc != oldCrc || validA != validB)
+  if (migratedFromV11)
+  {
+    // Beide Slots sofort auf V12 anheben, damit nach dem ersten Boot wieder ein
+    // vollstaendig redundanter, einheitlicher A/B-Stand vorhanden ist.
+    interfaceConfigSave();
+    interfaceConfigSave();
+  }
+  else if (interface_cfg.crc != oldCrc || validA != validB)
   {
     // A/B-Self-Heal: bei nur einem gueltigen Schnittstellen-Slot wird der
     // defekte/leere Slot sofort wieder aufgebaut. Das ist besonders wichtig
@@ -1102,9 +1135,14 @@ bool FLASHMEM interfaceConfigImport(const uint8_t* src, uint16_t srcSize)
 
   const uint32_t tmpCrc = interfaceConfigCrcBytes(&tmp, sizeof(tmp) - sizeof(tmp.crc));
   if (tmp.magic != IF_CFG_MAGIC) return false;
-  if (tmp.version != IF_CFG_VERSION) return false;
+  if (tmp.version != IF_CFG_VERSION && tmp.version != IF_CFG_PREVIOUS_VERSION) return false;
   if (tmp.crc != tmpCrc) return false;
 
+  if (tmp.version == IF_CFG_PREVIOUS_VERSION)
+  {
+    tmp.sd_log_integrity_mode = TP_LOG_INTEGRITY_OFF;
+    tmp.version = IF_CFG_VERSION;
+  }
   interface_cfg = tmp;
   interfaceConfigSanitize();
   interfaceConfigSave();
@@ -1299,11 +1337,14 @@ bool FLASHMEM interfaceWebSetSd(uint8_t outputIndex,
                                 uint8_t writeIntervalIndex,
                                 bool loggingEnabled,
                                 bool diagnosticEnabled,
-                                bool headerEnabled)
+                                bool headerEnabled,
+                                uint8_t integrityMode)
 {
   interfaceConfigLoad();
   if (!interfaceWebFilterAllowed(outputIndex, filterIndex)) return false;
   if (writeIntervalIndex >= IF_SD_INTERVAL_COUNT) return false;
+  if (integrityMode >= TP_LOG_INTEGRITY_COUNT) return false;
+  if (tpLogIntegrityIsCertified(integrityMode) && !tpSignedDataCertifiedModeReady()) return false;
 
   const uint8_t maxWriteIndex = interfaceSdMaxWriteIntervalIndexForOutput(outputIndex);
   if (writeIntervalIndex > maxWriteIndex) return false;
@@ -1315,6 +1356,7 @@ bool FLASHMEM interfaceWebSetSd(uint8_t outputIndex,
   interface_cfg.sd_interval_index = writeIntervalIndex;
   interface_cfg.sd_diagnostic_data_enabled = diagnosticEnabled ? 1 : 0;
   interface_cfg.sd_header_enabled = headerEnabled ? 1 : 0;
+  interface_cfg.sd_log_integrity_mode = integrityMode;
   interface_cfg.sd_logging_enabled = loggingEnabled ? 1 : 0;
   interfaceConfigSave();
   sdLogResetSchedule();
@@ -1468,6 +1510,21 @@ bool interfaceSdLogHeaderEnabled(void)
 {
   interfaceConfigLoad();
   return interface_cfg.sd_header_enabled != 0;
+}
+
+uint8_t interfaceSdLogIntegrityMode(void)
+{
+  interfaceConfigLoad();
+  if (interface_cfg.sd_log_integrity_mode >= TP_LOG_INTEGRITY_COUNT)
+  {
+    interface_cfg.sd_log_integrity_mode = TP_LOG_INTEGRITY_OFF;
+  }
+  return interface_cfg.sd_log_integrity_mode;
+}
+
+bool interfaceSdCertifiedIntegrityReady(void)
+{
+  return tpSignedDataCertifiedModeReady();
 }
 
 void interfaceSdLoggingForceOff(void)
@@ -3303,6 +3360,20 @@ static void FLASHMEM interfaceEthShowWaitScreen(const char* message)
   flag.menu_lcd_upd = false;
 }
 
+
+static void FLASHMEM interfaceEthRestartForModeChange()
+{
+  // NativeEthernet/FNET stellt keine belastbare end()-/Neuinitialisierungs-API
+  // bereit. Ein Wechsel zwischen statischer Adresse und DHCP wird deshalb nach
+  // dem Speichern kontrolliert durch einen sauberen Geraeteneustart wirksam.
+  // Das ist reproduzierbar und verhindert den bisherigen 8-s-Watchdog-Haenger.
+  interfaceEthShowWaitScreen(T(TXT_FACTORY_REBOOT));
+  safetyBeginBlockingOperation();
+  delay(250);
+  SOFT_RESET();
+  while (true) { delay(10); }
+}
+
 static void FLASHMEM interfaceEthApplyWithWaitScreen(void)
 {
   interfaceEthShowWaitScreen(T(TXT_ETH_INIT_MESSAGE));
@@ -3341,17 +3412,17 @@ void FLASHMEM interface_eth_dhcp_menu(void)
 {
   interfaceConfigLoad();
   uint8_t oldValue = interface_cfg.eth_dhcp;
-  uint8_t ethWasEnabled = interface_cfg.eth_enabled;
-
   interfaceToggleMenu("DHCP",
                       interface_cfg.eth_dhcp,
                       MENU_ETHERNET);
 
-  // DHCP-Umschaltung startet Ethernet neu, falls Ethernet aktiv ist.
-  // Auch hier vorher die Warte-Seite zeichnen.
-  if (ethWasEnabled && oldValue != interface_cfg.eth_dhcp)
+  // Der Wechsel DHCP <-> statisch benoetigt bei NativeEthernet/FNET einen
+  // sauberen Stack-Neustart. Ein erneutes Ethernet.begin() im bereits
+  // initialisierten Gegenmodus kann keine Lease starten und bis zum Watchdog
+  // blockieren. Die Auswahl ist bereits persistent gespeichert.
+  if (oldValue != interface_cfg.eth_dhcp)
   {
-    interfaceEthApplyWithWaitScreen();
+    interfaceEthRestartForModeChange();
   }
 }
 
@@ -3997,6 +4068,61 @@ void FLASHMEM interface_sd_diagnostic_data_menu(void)
   }
 }
 
+void FLASHMEM interface_sd_log_integrity_menu(void)
+{
+  static int8_t current_selection = 0;
+  static bool frisch = true;
+
+  interfaceConfigLoad();
+  const bool certifiedReady = tpSignedDataCertifiedModeReady();
+
+  if (frisch)
+  {
+    current_selection = interface_cfg.sd_log_integrity_mode;
+    if (current_selection < 0 || current_selection >= TP_LOG_INTEGRITY_COUNT)
+      current_selection = TP_LOG_INTEGRITY_OFF;
+    flag.menu_lcd_upd = false;
+    frisch = false;
+  }
+
+  const char* items[] =
+  {
+    ifText("Aus", "Off"),
+    "SHA-256",
+    certifiedReady
+      ? ifText("CSV zertifiziert", "Certified CSV")
+      : ifText("CSV zertifiziert (gesperrt)", "Certified CSV (locked)"),
+    certifiedReady
+      ? ifText("TPLOG zertifiziert", "Certified TPLOG")
+      : ifText("TPLOG zertifiziert (gesperrt)", "Certified TPLOG (locked)"),
+    ifTextBack()
+  };
+
+  if (interfaceRunStringList(ifText("Log-Integritaet", "Log integrity"),
+                             items, 5, current_selection, 5))
+  {
+    if (current_selection < TP_LOG_INTEGRITY_COUNT)
+    {
+      const uint8_t requested = (uint8_t)current_selection;
+      if (!tpLogIntegrityIsCertified(requested) || certifiedReady)
+      {
+        if (interface_cfg.sd_log_integrity_mode != requested)
+        {
+          interface_cfg.sd_log_integrity_mode = requested;
+          interfaceConfigSave();
+          // Ein Integritaetswechsel darf spaeter nie unbemerkt in derselben
+          // Provenienzperiode fortlaufen. Der Logger bekommt deshalb bereits
+          // jetzt denselben Reset-Hook wie Format-/Intervallaenderungen.
+          sdLogResetSchedule();
+        }
+      }
+    }
+
+    frisch = true;
+    interfaceReturnTo(MENU_SD_CARD);
+  }
+}
+
 void FLASHMEM interface_sd_menu(void)
 {
   static int8_t current_selection = 0;
@@ -4019,10 +4145,11 @@ void FLASHMEM interface_sd_menu(void)
     ifText("SD Schreiben", "SD Write"),
     ifText("SD Diagnose Daten", "SD Diagnostic Data"),
     ifText("Kopfzeile", "Header"),
+    ifText("Log-Integritaet", "Log integrity"),
     ifTextBack()
   };
 
-  if (interfaceRunStringList(T(TXT_MENU_SD_CARD), items, 8, current_selection, 5))
+  if (interfaceRunStringList(T(TXT_MENU_SD_CARD), items, 9, current_selection, 5))
   {
     switch (current_selection)
     {
@@ -4033,6 +4160,7 @@ void FLASHMEM interface_sd_menu(void)
       case 4:  menu_level = MENU_SD_INTERVAL; break;
       case 5:  menu_level = MENU_SD_DIAGNOSTIC_DATA; break;
       case 6:  menu_level = MENU_SD_HEADER; break;
+      case 7:  menu_level = MENU_SD_LOG_INTEGRITY; break;
       default:
         menu_level = MENU_INTERFACES;
         frisch = true;

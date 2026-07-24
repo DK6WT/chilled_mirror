@@ -7,53 +7,56 @@ sensor and a 5-inch RA8875/GSL1680 touch display.**
 TP-3000 ist die Firmware eines experimentellen Taupunktspiegel-Hygrometers.
 Sie erfasst die Spiegel- und Umgebungstemperatur ratiometrisch, erkennt die
 Betauung optisch und regelt die Spiegeltemperatur bidirektional über ein
-Peltier-Element. Anzeige, Kalibrierung, Logging, Diagnose, Safety und optionale
-Schnittstellen sind in einem eigenständigen Embedded-System zusammengeführt.
+Peltier-Element. Anzeige, Kalibrierung, Logging, Diagnose, Safety,
+Zertifikatsprüfung und optionale Schnittstellen sind in einem eigenständigen
+Embedded-System zusammengeführt.
 
 > **Entwicklungsstatus:** funktionsfähiger Engineering-Prototyp in aktiver
 > Hardwareerprobung. Diese Veröffentlichung enthält keine Zusicherung einer
-> Kalibrierung, Baumusterprüfung oder Sicherheitszertifizierung.
+> Kalibrierung, Baumusterprüfung, Akkreditierung oder Sicherheitszertifizierung.
 
-**Version:** `0.50.0`  
-**Stand:** `11.07.2026`  
-**Pakettyp:** öffentliches Quellpaket / GitHub-Quellstand
+## Release-Stand
 
-## Hinweis zum alternativen Hauptbildschirm
+| Merkmal | Stand |
+|---|---|
+| Öffentliche Projektversion | **V0.50.1** |
+| Interne Build-ID | **0.50.1_87** |
+| Build-Datum | **24.07.2026** |
+| Pakettyp | öffentliches Quellpaket / GitHub-Quellstand |
+| Zielhardware | Teensy 4.1 |
 
-In diesem Quellstand sind bereits erste Arbeiten an einem optionalen
-alternativen Hauptbildschirm enthalten. Dieser soll im zentralen
-Messwertbereich drei Zeilen statt der bisherigen zwei darstellen:
-relative Feuchte, Taupunkt und Umgebungstemperatur.
+V0.50.1 ist der eingefrorene Funktions- und Quellstand vor der geplanten
+Nutzung der nachgerüsteten externen QSPI-Speicher. Der vorgesehene
+**64-MB-Flash** und die **8-MB-PSRAM** werden in diesem Release noch nicht
+initialisiert und nicht als Daten- oder Arbeitsspeicher verwendet.
+Bezeichnungen wie `FLASHMEM` in Quellcode und Entwicklungsnotizen betreffen die
+interne Programmspeicherzuordnung des Teensy 4.1 und nicht den künftigen
+externen Flash-Baustein.
 
-Die grundlegende Funktion und erste Layout-Ansätze sind bereits angelegt. Die
-optische Gestaltung, Abstände und endgültige Anordnung entsprechen jedoch noch
-nicht dem vorgesehenen Endstand. Der bisherige Hauptbildschirm bleibt erhalten;
-der alternative Hauptbildschirm ist derzeit als Entwicklungsstand zu betrachten.
+## Version 0.50.1
 
-## Version 0.50.0
-
-Mit diesem Stand wird das gesamte Projekt auf die dreiteilige Versionsnummer
-`MAJOR.MINOR.PATCH` umgestellt. Die früheren internen Vxx-Arbeitsnummern werden
-für neue Versionen nicht mehr verwendet.
+Mit V0.50.1 wurde die in V0.50.0 eingeführte dreiteilige Versionsnummer
+`MAJOR.MINOR.PATCH` fortgeführt. Die interne Build-ID kennzeichnet den
+konkreten Entwicklungs- und Prüfstand innerhalb der öffentlichen Version.
 
 Der TP-3000-Projektcode wird unter **GNU GPL Version 3 only**
-(`GPL-3.0-only`) verteilt. Fremdkomponenten behalten ihre jeweils dokumentierten
-Lizenzen.
-
-Die Setup-Seite **Lizenzen / Marken** beziehungsweise **Licenses / Trademarks**
-ist mit UP und DOWN in Schritten von jeweils zwei Zeilen scrollbar. Sie zeigt
-neben Projektlizenz, Herkunft und Gewährleistungsausschluss auch das Recht zur
-Weitergabe und Änderung unter GPL-3.0-only, die öffentliche Quellcodeadresse
-`github.com/DK6WT/chilled_mirror` sowie den Hinweis zur optionalen
-ALMEMO-Anbindung und zur Marke.
+(`GPL-3.0-only`) verteilt. Fremdkomponenten behalten ihre jeweils
+dokumentierten Lizenzen. Die Setup-Seite **Lizenzen / Marken** beziehungsweise
+**Licenses / Trademarks** ist scrollbar und zeigt Projektlizenz, Herkunft,
+Gewährleistungsausschluss sowie den Hinweis zur optionalen ALMEMO-/WinControl-
+Anbindung.
 
 ### Status der GSL1680-Panel-Firmware
 
 Die panelspezifische EastRising-/BuyDisplay-Firmware
-`external/GSL1680/gslX680_311_5_F.h` ist in diesem öffentlichen Quellpaket
-**nicht enthalten**. Ihre eigenständigen Weitergaberechte sind nicht
-abschließend dokumentiert; sie ist kein Bestandteil der TP-3000-GPL-
-Lizenzierung.
+
+```text
+external/GSL1680/gslX680_311_5_F.h
+```
+
+ist in diesem öffentlichen Quellpaket **nicht enthalten**. Ihre eigenständigen
+Weitergaberechte sind nicht abschließend dokumentiert; sie ist kein Bestandteil
+der TP-3000-GPL-Lizenzierung.
 
 Ein Nutzer bezieht die zum eigenen Display gehörende Originaldatei direkt vom
 Displayhersteller und legt sie lokal unter dem genannten Pfad ab. `.gitignore`
@@ -64,10 +67,10 @@ Referenzdatei hatte folgende SHA-256-Prüfsumme:
 ea756ce8d96631337fa09abe22c4e95aaad86cb706b561a52dfd143e751edd96
 ```
 
-Der Wrapper `GSL1680Firmware.h` lässt die Herstellerdatei unverändert und ordnet
-das dort verwendete 8051-Schlüsselwort `code` nur während des Includes dem
-Makro `PROGMEM` zu. Ohne lokal installierte Panel-Firmware stoppt der Build mit
-einer eindeutigen Fehlermeldung. Ein kompiliertes Abbild würde die
+Der Wrapper `GSL1680Firmware.h` lässt die Herstellerdatei unverändert und
+ordnet das dort verwendete 8051-Schlüsselwort `code` nur während des Includes
+dem Makro `PROGMEM` zu. Ohne lokal installierte Panel-Firmware stoppt der Build
+mit einer eindeutigen Fehlermeldung. Ein kompiliertes Abbild würde die
 Herstellerdaten enthalten und wird deshalb nicht mit diesem öffentlichen
 Quellpaket verteilt.
 
@@ -124,6 +127,48 @@ in den abgeleiteten Dateien erhalten.
 - A/B-gesicherte EEPROM-Einstellungen, Diagnosefunktionen, Alarme, Watchdog
   und mehrstufige Safety-Abschaltungen
 
+### Erweiterungen in V0.50.1
+
+- wählbarer Hauptbildschirm mit zwei oder drei Messwerten auf TFT und Web
+- ADC2-Dunkelwertbestimmung vor jeder Optik-Auto-Cal
+- Geräteidentität mit intern erzeugtem ECDSA-P-256-Schlüssel
+- root-signiertes Gerätezertifikat mit gebundener und gesperrter Seriennummer
+- signierte Gerätejustierung, Kopfjustierung und Systemkalibrierung
+- Firmware-SHA-256, Firmwarezertifikat und historischer Firmwarekontext für
+  Kalibrierscheine
+- Kalibrierscheinarchiv mit Zeitraumssuche, Wirksamkeitsjournal und
+  unverändert archivierten externen PDF-Kalibrierscheinen
+- deutsch/englischer A4-Kalibrierschein mit Seitenzählung und zwei
+  TP3C1-V0.4-QR-Codes
+- vollständiger elektronischer TP3Q3-Export; der gedruckte und am TFT gezeigte
+  Deep Link lautet `tp3000://verify#TP3C1:<Base38>`
+- vier SD-Logmodi: Aus, SHA-256, zertifizierte CSV und zertifizierter
+  TPLOG-Container
+- TFT-Seite `Info / Gültigkeit`, Lizenzseite und Anzeige des zweiteiligen
+  Kalibrierschein-QR
+- kontrollierter Neustart beim Wechsel zwischen DHCP und statischer IPv4-
+  Konfiguration, damit NativeEthernet/FNET sauber neu initialisiert wird
+- RAM1-/RAM2-Bereinigung für Ethernet, Webserver, QR-Erzeugung und
+  Zertifikatsfunktionen
+
+### LED-Autoadaption
+
+Die LED-Autoadaption besitzt drei Betriebsarten:
+
+1. **Aus** – keine temperaturabhängige LED-Korrektur.
+2. **Ein – Grundkurve** – interne OD-850FHT-Herstellerkurve oder eine geprüfte
+   System-Grundkurve von SD.
+3. **Selbstlernend** – Grundkurve plus kopfbezogenes Lernmodell aus
+   Auto-Cal-Daten.
+
+Das Lernmodell verwendet 161 Temperaturklassen von −50 bis +110 °C, bewertet
+Messpunkte nach Alter und Plausibilität, begrenzt Ausreißer, Extrapolation und
+Korrekturwirkung und speichert die kopfbezogenen Lerndaten dauerhaft. Bei
+fehlender oder fehlerhafter SD fällt der Betrieb kontrolliert auf
+**Ein – Grundkurve** zurück. Während aktivem Logging wird der vom Logger
+gepflegte SD-Laufzeitstatus verwendet; bei gestopptem Logging erfolgt die
+Prüfung zu Beginn jeder Auto-Cal und spätestens im Fünf-Minuten-Raster.
+
 ## Zielhardware
 
 - Teensy 4.1
@@ -151,9 +196,11 @@ mitgeliefert.
 
 Diese Hardware- und Fertigungsunterlagen sind **nicht Bestandteil der
 GPL-3.0-only-Veröffentlichung**, bleiben proprietär und werden durch die GNU GPL
-nicht lizenziert. Die Firmware kann unabhängig davon vom Anwender normal über
-USB auf den Teensy 4.1 geladen und aktualisiert werden; es gibt keine
-Signaturprüfung oder technische Sperre für selbst kompilierte Firmware.
+nicht lizenziert. Selbst kompilierte Firmware kann weiterhin normal über USB
+auf den Teensy 4.1 geladen werden; der TP-3000 besitzt in V0.50.1 keinen
+Secure-Boot- oder Upload-Sperrmechanismus. Die integrierte Firmware-Hash- und
+Zertifikatsprüfung dokumentiert beziehungsweise bewertet das laufende
+Firmwareabbild, verhindert aber keine kundenspezifische Firmware.
 
 ## Build-Umgebung
 
@@ -193,7 +240,8 @@ aus dem projektlokalen Ordner `libraries/` eingebunden:
 
 - `libraries/ProtoCentral_ADS1262_32-bit_precision_ADC_Library` — Version 2.0.0, MIT
 - `libraries/RTC_RV3129_Arduino_Library` — Version 1.0.0, MIT
-- `libraries/SparkFun_BMP581_Arduino_Library` — Version 1.0.1, MIT
+- `libraries/SparkFun_BMP581_Arduino_Library` — Version 1.0.1, MIT; enthält die Bosch BMP5 API unter BSD-3-Clause
+- `libraries/TP3000_micro_ecc` — Version 1.0.0-tp3000.1, BSD-2-Clause
 - `libraries/WDT_T4` — Version 0.1, MIT
 
 Die Bibliotheksordner enthalten die jeweils erforderlichen Quellen, Metadaten,
@@ -236,12 +284,36 @@ Metro, EEPROM, Time und den Teensy-Core aus der installierten
 Teensyduino-/Arduino-Umgebung. Diese Komponenten werden im TP-3000-Ordner nicht
 dupliziert und behalten ihre eigenen Urheber- und Lizenzbedingungen.
 
-Die exakten Einzelversionsnummern und die aktuelle Flash-/RAM-Ausgabe sollen vor
-einem öffentlichen Release aus einer ausführlichen 0.50.0-Kompilierung mit
-Arduino IDE 2.3.10 und Teensyduino 1.62.0 archiviert werden. Diese reine
-Für diese Paket- und Fontaktualisierung wurde kein neuer vollständiger Teensy-Build erzeugt.
+Die Bereinigung dieses öffentlichen Quellpakets wurde statisch geprüft. In der
+Bereinigungsumgebung stand jedoch keine vollständige Arduino-/Teensyduino-
+Toolchain zur Verfügung. Vor der endgültigen Gerätefreigabe muss deshalb ein
+vollständiger V0.50.1-Build mit Arduino IDE 2.3.10 und Teensyduino 1.62.0
+erzeugt, die vollständige Flash-/RAM-Ausgabe archiviert und anschließend die
+Hardware-Abnahme durchgeführt werden.
 
-## Quellstruktur
+## Repository- und Quellstruktur
+
+```text
+TP-3000.ino                  Hauptsketch
+*.ino, *.cpp, *.h, *.c       Firmwaremodule und eingebettete Web-/Fontdaten
+libraries/                   projektlokale, versionierte Build-Bibliotheken
+external/GSL1680/            Anleitung für die lokal zu beschaffende Panel-Firmware
+SD_CARD_TEMPLATE/            Vorlage für optionale SD-Dateien
+assets/                      dokumentierte Bildquelle
+third_party/                 reproduzierbare Fontquellen und Herkunftsdaten
+tools/                       Font-Provenienz und Release-Audit
+docs/release/                aktueller Release-, Validierungs- und Lizenzaudit
+docs/specifications/         signierte Daten- und QR-Formatspezifikationen
+docs/architecture/           Architektur- und Workflowbeschreibungen
+docs/testing/                Implementierungs- und Testberichte
+docs/history/v0.50.1/        Entwicklungsnotizen und Quellenprüfungen je Build
+LICENSES/                    Lizenztexte und komponentenspezifische Hinweise
+```
+
+Die zahlreichen buildbezogenen Entwicklungsnotizen wurden aus der Hauptebene
+entfernt, aber vollständig unter `docs/history/v0.50.1/` erhalten.
+
+### Wichtige Quellmodule
 
 - `TP-3000.ino`: Hauptprogramm, Initialisierung und Scheduler
 - `ads1263.ino`: Pt100-, Referenz- und Optikmessung
@@ -384,27 +456,23 @@ Bei Weitergabe des Quell- oder Binärpakets müssen insbesondere erhalten bleibe
 
 ## Optionale ALMEMO-/WinControl-Anbindung und Markenhinweis
 
-ALMEMO® ist eine von der AHLBORN Mess- und Regelungstechnik GmbH verwendete
-Produktbezeichnung und Marke. AMR WinControl (im Gerät kurz `WinControl`) wird
-von der akrobit software GmbH entwickelt und für ALMEMO-Systeme über AHLBORN
-vertrieben.
+ALMEMO® ist eine Produktbezeichnung und Marke der AHLBORN Mess- und
+Regelungstechnik GmbH. WinControl ist ein Produktname der AHLBORN Mess- und
+Regelungstechnik GmbH.
 
 TP-3000 ist ein unabhängiges Projekt und steht in keiner geschäftlichen oder
-organisatorischen Verbindung zu AHLBORN oder akrobit. Das Projekt wird von
-diesen Unternehmen weder unterstützt, gesponsert, freigegeben, geprüft noch
-zertifiziert.
+organisatorischen Verbindung zu AHLBORN. Das Projekt wird von AHLBORN weder
+unterstützt, gesponsert, freigegeben, geprüft noch zertifiziert.
 
-Die Bezeichnungen ALMEMO® und AMR WinControl werden ausschließlich zur
-sachlichen Beschreibung optionaler Schnittstellenfunktionen verwendet: der
-seriellen Anbindung an ALMEMO-Messgeräte sowie der Messwertausgabe im
-ALMEMO-V6-Format zur Nutzung mit AMR WinControl über RS232 oder Ethernet/TCP.
-Dies ist keine Aussage über eine allgemeine oder vollständige
-ALMEMO-Kompatibilität.
+Die Bezeichnungen ALMEMO® und WinControl werden ausschließlich zur sachlichen
+Beschreibung optionaler Schnittstellenfunktionen verwendet: der seriellen
+Anbindung an ALMEMO-Messgeräte sowie der Messwertausgabe im ALMEMO-V6-Format
+zur Nutzung mit WinControl über RS232 oder Ethernet/TCP.
 
-Es wird kein ALMEMO-, WinControl-, AHLBORN- oder akrobit-Logo verwendet. Die
-vollständige zweisprachige Erklärung steht in
-`LICENSES/ALMEMO-TRADEMARK-NOTICE.txt` und wird in gekürzter Form auch auf der
-scrollbaren Geräte-Seite **Lizenzen / Marken** angezeigt.
+Es wird kein ALMEMO-, WinControl- oder AHLBORN-Logo verwendet. Die vollständige
+zweisprachige Erklärung steht in `LICENSES/ALMEMO-TRADEMARK-NOTICE.txt` und wird
+in gekürzter Form auch auf der scrollbaren Geräte-Seite **Lizenzen / Marken**
+angezeigt.
 
 ## Earth-Startbild und externe GSL1680-Firmware
 
@@ -449,8 +517,29 @@ Anfang an unter GPLv3 hätte stehen müssen; die öffentliche Repository-Lizenz
 wurde entsprechend korrigiert. Dadurch ist die Treiber-Rechtekette nun
 konsistent als GPLv3 dokumentiert.
 
-## Gewährleistung
+## Release- und Prüfdokumente
+
+- [Buildanleitung](BUILDING.md)
+- [Release Notes](docs/release/RELEASE_NOTES_V0.50.1.md)
+- [Quellpaket und Übergabe](docs/release/SOURCE_PACKAGE_V0.50.1.md)
+- [Statische Validierung](docs/release/VALIDATION_V0.50.1.md)
+- [Bibliotheks- und Lizenzaudit](docs/release/LICENSE_AUDIT_V0.50.1.md)
+- [Dokumentationsindex](docs/README.md)
+- [vollständiger Entwicklungsverlauf](CHANGELOG.md)
+
+Der öffentliche Release enthält keine privaten Hersteller-, Labor- oder
+Geräteschlüssel, keine reale Produktionsprovisionierung und keine vorgebauten
+HEX-/BIN-Abbilder.
+
+## Gewährleistung und Statushinweis
 
 Die Firmware wird ohne Gewährleistung bereitgestellt. Sie steuert Heiz-/Kühl-
 und Leistungshardware; Inbetriebnahme und Betrieb erfordern unabhängige
 Hardware-Schutzmaßnahmen und eine eigene Sicherheitsprüfung.
+
+V0.50.1 ist ein Entwicklungsstand und keine Aussage über Konformität,
+Akkreditierung, Baumusterprüfung oder eine garantierte Messunsicherheit. Vor
+produktivem oder metrologischem Einsatz sind mindestens ein vollständiger
+Teensyduino-Releasebuild, die reale Speicherstatistik sowie die Hardware-,
+Safety-, Netzwerk-, SD-, QR- und Kalibrier-End-to-End-Tests aus
+`docs/release/VALIDATION_V0.50.1.md` durchzuführen.

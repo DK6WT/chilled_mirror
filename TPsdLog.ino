@@ -30,6 +30,8 @@
 #include <math.h>
 #include <string.h>
 #include "TP_T.h"
+#include "TPsignedData.h"
+#include "TPcertifiedLog.h"
 
 // Einstellungen aus TPmenu_Interface.ino
 extern bool interfaceSdLoggingEnabled(void);
@@ -40,6 +42,7 @@ extern bool interfaceSdDiagnosticDataEnabled(void);
 extern bool outputDataGetSample(uint8_t filterIndex, output_data_sample_t* out);
 extern uint32_t outputDataRawSequence(void);
 extern bool interfaceSdLogHeaderEnabled(void);
+extern uint8_t interfaceSdLogIntegrityMode(void);
 extern bool interfaceFlowDisplayEnabled(void);
 extern const char* interfaceFlowDisplayUnitText(void);
 extern bool interfaceAlmemoTraceEnabled(void);
@@ -467,6 +470,21 @@ static void FLASHMEM sdLogApplyFatTimestamp(File& f, bool fileWasNew)
 static void FLASHMEM sdLogBuildFilename(char* out, size_t outSize)
 {
   if (out == nullptr || outSize == 0) return;
+  out[0] = '\0';
+
+  // SHA-256 und Zertifiziert verwenden unveraenderliche, nummerierte
+  // Abschnitte. Der Legacy-Modus behaelt die bisherigen Tagesdateien.
+  if (interfaceSdLogIntegrityMode() != TP_LOG_INTEGRITY_OFF)
+  {
+    char error[96] = {0};
+    if (tpCertifiedLogGetCsvPath(interfaceSdDiagnosticDataEnabled(),
+                                 out, outSize, error, sizeof(error)))
+    {
+      return;
+    }
+    sdLogSetError(error[0] ? error : "Integritaetsdatei Fehler");
+    return;
+  }
 
   if (sdLogTimeValid())
   {
@@ -701,6 +719,14 @@ void FLASHMEM sdLogBegin(void)
   {
     sdLogReady = true;
     sdLogStatus = SDLOG_STATUS_READY;
+    char recoveryError[128] = {0};
+    if (!tpCertifiedLogBegin(recoveryError, sizeof(recoveryError)))
+    {
+      sdLogStatus = SDLOG_STATUS_FILE_ERR;
+      sdLogRuntimeBlocked = true;
+      sdLogSetError(recoveryError);
+      return;
+    }
     sdLogBuildFilename(sdLogCurrentFile, sizeof(sdLogCurrentFile));
     return;
   }
@@ -709,12 +735,41 @@ void FLASHMEM sdLogBegin(void)
   if (!sdLogEnsureReady())
   {
     sdLogRuntimeBlocked = true;
+    return;
   }
+
+  char recoveryError[128] = {0};
+  if (!tpCertifiedLogBegin(recoveryError, sizeof(recoveryError)))
+  {
+    sdLogStatus = SDLOG_STATUS_FILE_ERR;
+    sdLogRuntimeBlocked = true;
+    sdLogSetError(recoveryError);
+    return;
+  }
+  sdLogBuildFilename(sdLogCurrentFile, sizeof(sdLogCurrentFile));
 }
 
 void FLASHMEM sdLogResetSchedule(void)
 {
+  // Die Aufrufer haben die neue Konfiguration teilweise bereits gespeichert.
+  // Noch gepufferte Altwerte werden deshalb wie bisher verworfen, statt sie
+  // unter der neuen Provenienz zu protokollieren. Der bereits auf SD liegende
+  // Abschnitt wird dagegen mit seinem beim Start eingefrorenen Kontext sauber
+  // versiegelt.
   sdLogResetRuntimeBuffers();
+  if (tpCertifiedLogHasActiveSegment())
+  {
+    char sealed[48] = {0};
+    char error[128] = {0};
+    if (!tpCertifiedLogFinalize(false, sealed, sizeof(sealed), error, sizeof(error)))
+    {
+      sdLogSetError(error);
+      sdLogStatus = SDLOG_STATUS_FILE_ERR;
+      sdLogRuntimeBlocked = true;
+      return;
+    }
+  }
+  sdLogCurrentFile[0] = '\0';
 }
 
 bool sdLogReadyForLogging(void)
@@ -1141,10 +1196,32 @@ static bool FLASHMEM sdLogFlushBuffer(void)
     return false;
   }
 
-  char filename[32];
+  char filename[48];
   sdLogBuildFilename(filename, sizeof(filename));
+  if (filename[0] == '\0')
+  {
+    sdStorageDiagRecordCsvFlushTotal(csvTotalStartUs, csvTotalSamples);
+    sdLogStatus = SDLOG_STATUS_FILE_ERR;
+    if (sdLogLastError[0] == '\0') sdLogSetError("Dateiname Fehler");
+    return false;
+  }
   strncpy(sdLogCurrentFile, filename, sizeof(sdLogCurrentFile) - 1);
   sdLogCurrentFile[sizeof(sdLogCurrentFile) - 1] = '\0';
+
+  const bool segmented = interfaceSdLogIntegrityMode() != TP_LOG_INTEGRITY_OFF;
+  const bool pathExisted = SD.exists(sdLogCurrentFile);
+  if (segmented)
+  {
+    char integrityError[128] = {0};
+    if (!tpCertifiedLogBeforeAppend(sdLogCurrentFile, !pathExisted,
+                                    integrityError, sizeof(integrityError)))
+    {
+      sdStorageDiagRecordCsvFlushTotal(csvTotalStartUs, csvTotalSamples);
+      sdLogStatus = SDLOG_STATUS_FILE_ERR;
+      sdLogSetError(integrityError);
+      return false;
+    }
+  }
 
   sdStorageDiagBegin(SD_DIAG_CSV_OPEN);
   auto f = SD.open(sdLogCurrentFile, FILE_WRITE);
@@ -1176,11 +1253,25 @@ static bool FLASHMEM sdLogFlushBuffer(void)
   sdStorageDiagBegin(SD_DIAG_CSV_FLUSH);
   sdLogApplyFatTimestamp(f, fileWasNew);
   f.flush();
+  const uint32_t confirmedSize = (uint32_t)f.size();
   sdStorageDiagEnd(SD_DIAG_CSV_FLUSH);
 
   sdStorageDiagBegin(SD_DIAG_CSV_CLOSE);
   f.close();
   sdStorageDiagEnd(SD_DIAG_CSV_CLOSE);
+
+  if (segmented)
+  {
+    char integrityError[128] = {0};
+    if (!tpCertifiedLogAfterFlush(sdLogCurrentFile, confirmedSize,
+                                  integrityError, sizeof(integrityError)))
+    {
+      sdStorageDiagRecordCsvFlushTotal(csvTotalStartUs, csvTotalSamples);
+      sdLogStatus = SDLOG_STATUS_FILE_ERR;
+      sdLogSetError(integrityError);
+      return false;
+    }
+  }
 
   sdStorageDiagRecordCsvFlushTotal(csvTotalStartUs, csvTotalSamples);
 
@@ -1193,6 +1284,23 @@ static bool FLASHMEM sdLogFlushBuffer(void)
 
 static bool FLASHMEM sdLogStoreSample(void)
 {
+  if (tpCertifiedLogHasActiveSegment() &&
+      tpCertifiedLogNeedsRotation(interfaceSdDiagnosticDataEnabled()))
+  {
+    // Die Werte im RAM können vor und nach dem Zustandswechsel liegen. Sie
+    // werden bewusst verworfen; der abgeschlossene SD-Abschnitt bleibt
+    // beweisbar und der nächste Messwert startet einen neuen Kontext.
+    sdLogBufferCount = 0;
+    char sealed[48] = {0};
+    char error[128] = {0};
+    if (!tpCertifiedLogFinalize(false, sealed, sizeof(sealed), error, sizeof(error)))
+    {
+      sdLogSetError(error);
+      return false;
+    }
+    sdLogCurrentFile[0] = '\0';
+  }
+
   if (sdLogBufferCount >= SDLOG_BUFFER_SAMPLES)
   {
     if (!sdLogFlushBuffer()) return false;
@@ -1214,6 +1322,18 @@ void sdLogTask(void)
   {
     sdLogRuntimeBlocked = false;
     sdLogResetRuntimeBuffers();
+    if (tpCertifiedLogHasActiveSegment())
+    {
+      char sealed[48] = {0};
+      char error[128] = {0};
+      if (!tpCertifiedLogFinalize(false, sealed, sizeof(sealed), error, sizeof(error)))
+      {
+        sdLogStatus = SDLOG_STATUS_FILE_ERR;
+        sdLogSetError(error);
+        return;
+      }
+      sdLogCurrentFile[0] = '\0';
+    }
     if (sdLogReady && sdLogStatus != SDLOG_STATUS_FILE_ERR)
     {
       sdLogStatus = SDLOG_STATUS_READY;
@@ -1365,11 +1485,69 @@ const char* FLASHMEM sdLogGetStatusTextEN(void)
 
 const char* FLASHMEM sdLogGetCurrentFile(void)
 {
+  const char* active = tpCertifiedLogActiveCsvPath();
+  if (active != nullptr && active[0] != '\0') return active;
   if (sdLogCurrentFile[0] == '\0')
   {
     sdLogBuildFilename(sdLogCurrentFile, sizeof(sdLogCurrentFile));
   }
   return sdLogCurrentFile;
+}
+
+bool FLASHMEM sdLogSealActiveSegment(const char* expectedBaseName,
+                                     char* sealedBaseName,
+                                     size_t sealedBaseNameSize,
+                                     char* errorText,
+                                     size_t errorTextSize)
+{
+  if (sealedBaseName != nullptr && sealedBaseNameSize > 0U) sealedBaseName[0] = '\0';
+  if (!tpCertifiedLogHasActiveSegment())
+  {
+    if (errorText != nullptr && errorTextSize > 0U)
+    {
+      strncpy(errorText, "Kein aktiver Integritätsabschnitt", errorTextSize - 1U);
+      errorText[errorTextSize - 1U] = '\0';
+    }
+    return false;
+  }
+
+  const char* activePath = tpCertifiedLogActiveCsvPath();
+  const char* activeBase = strrchr(activePath, '/');
+  activeBase = activeBase ? activeBase + 1 : activePath;
+  if (expectedBaseName != nullptr && expectedBaseName[0] != '\0' &&
+      strcasecmp(expectedBaseName, activeBase) != 0)
+  {
+    if (errorText != nullptr && errorTextSize > 0U)
+    {
+      strncpy(errorText, "Angeforderte Datei ist nicht mehr aktiv", errorTextSize - 1U);
+      errorText[errorTextSize - 1U] = '\0';
+    }
+    return false;
+  }
+
+  if (sdLogBufferCount > 0U && !sdLogFlushBuffer())
+  {
+    if (errorText != nullptr && errorTextSize > 0U)
+    {
+      strncpy(errorText, sdLogLastError, errorTextSize - 1U);
+      errorText[errorTextSize - 1U] = '\0';
+    }
+    return false;
+  }
+
+  char sealedPath[48] = {0};
+  if (!tpCertifiedLogFinalize(false, sealedPath, sizeof(sealedPath), errorText, errorTextSize))
+    return false;
+
+  const char* sealedBase = strrchr(sealedPath, '/');
+  sealedBase = sealedBase ? sealedBase + 1 : sealedPath;
+  if (sealedBaseName != nullptr && sealedBaseNameSize > 0U)
+  {
+    strncpy(sealedBaseName, sealedBase, sealedBaseNameSize - 1U);
+    sealedBaseName[sealedBaseNameSize - 1U] = '\0';
+  }
+  sdLogCurrentFile[0] = '\0';
+  return true;
 }
 
 const char* FLASHMEM sdLogGetLastError(void)

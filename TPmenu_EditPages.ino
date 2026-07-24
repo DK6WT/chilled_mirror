@@ -704,6 +704,175 @@ void FLASHMEM autocal_interval_menu(void)
 }
 
 
+
+// =========================================================================
+// LED-AUTOADAPTION - Aus / Grundkurve / selbstlernend
+// Lernen aus erfolgreichen Auto-Cals laeuft bei vorhandener SD in allen Modi.
+// Ohne SD bleiben AUS und EIN-GRUNDKURVE verfuegbar; nur SELBSTLERNEND ist gesperrt.
+// =========================================================================
+extern bool ledAdaptationSdAvailable(void);
+extern uint8_t ledAdaptationModeGet(void);
+extern bool ledAdaptationSetMode(uint8_t mode);
+extern bool ledAdaptationResetCurrentHead(char* message, size_t messageSize);
+extern uint32_t ledAdaptationAcceptedCount(void);
+extern uint16_t ledAdaptationValidBinCount(void);
+
+void FLASHMEM led_autoadaptation_mode_menu(void)
+{
+  static int8_t current_selection = 0;
+  static bool frisch = true;
+  static bool sdAvailable = false;
+
+  if (VirtLCDMenu == nullptr) return;
+  if (frisch) sdAvailable = ledAdaptationSdAvailable();
+
+  const char* itemsDeAll[] = { "Aus", "Ein - Grundkurve", "Selbstlernend" };
+  const char* itemsEnAll[] = { "Off", "On - base curve", "Self-learning" };
+  const char* itemsNoSdDe[] = { "Aus", "Ein - Grundkurve" };
+  const char* itemsNoSdEn[] = { "Off", "On - base curve" };
+  const char** items = nullptr;
+  uint8_t itemCount = 0U;
+
+  if (sdAvailable)
+  {
+    items = (ui_language == LANG_EN) ? itemsEnAll : itemsDeAll;
+    itemCount = 3U;
+  }
+  else
+  {
+    items = (ui_language == LANG_EN) ? itemsNoSdEn : itemsNoSdDe;
+    itemCount = 2U;
+  }
+
+  if (frisch)
+  {
+    current_selection = (int8_t)ledAdaptationModeGet();
+    if (current_selection < 0 || current_selection >= (int8_t)itemCount) current_selection = 0;
+    frisch = false;
+    flag.menu_lcd_upd = false;
+  }
+
+  if (menuListHandleInput(current_selection, itemCount, 250))
+  {
+    const uint8_t selectedMode = (uint8_t)current_selection;
+    (void)ledAdaptationSetMode(selectedMode);
+    frisch = true;
+    menuValueSaveAndReturn(MENU_CONTROL_PARAMETERS, false);
+    return;
+  }
+
+  if (!flag.menu_lcd_upd)
+  {
+    flag.menu_lcd_upd = true;
+    FirstBut = 0;
+    LastBut = 3;
+    VirtLCDMenu->clear();
+    if (VirtLCDMessage) VirtLCDMessage->clear();
+    VirtLCDMenu->setCursor(1, 1);
+    VirtLCDMenu->print(ui_language == LANG_EN ? "LED AUTO-ADAPTATION" : "LED-AUTOADAPTION");
+    VirtLCDMenu->setCursor(1, 2);
+    if (sdAvailable)
+    {
+      snprintf(lcd_buf, 255, ui_language == LANG_EN ?
+               "Learning always active: n=%lu, bins=%u" :
+               "Lernen immer aktiv: n=%lu, Klassen=%u",
+               (unsigned long)ledAdaptationAcceptedCount(),
+               (unsigned)ledAdaptationValidBinCount());
+      VirtLCDMenu->print(lcd_buf);
+    }
+    else
+    {
+      VirtLCDMenu->print(ui_language == LANG_EN ?
+                         "No SD: base curve available" :
+                         "Keine SD: Grundkurve verfuegbar");
+    }
+    lcd_scroll_Menu(items, itemCount, current_selection, 4, 1, 5);
+    VirtLCDMenu->transfer();
+    ReadButtons(true);
+  }
+}
+
+
+// =========================================================================
+// LED-LERNDATEN ZURUECKSETZEN - ausschliesslich aktueller Kopf
+// =========================================================================
+void FLASHMEM led_learning_reset_menu(void)
+{
+  static int8_t current_selection = 0;
+  static bool frisch = true;
+  static bool sdAvailable = false;
+
+  if (VirtLCDMenu == nullptr) return;
+  if (frisch) sdAvailable = ledAdaptationSdAvailable();
+
+  const char* itemsDe[] = { "Nein / zurück", "JA - aktuellen Kopf löschen" };
+  const char* itemsEn[] = { "No / back", "YES - delete current head" };
+  const char* noSdDe[] = { "Zurück" };
+  const char* noSdEn[] = { "Back" };
+  const char** items = sdAvailable ?
+                       ((ui_language == LANG_EN) ? itemsEn : itemsDe) :
+                       ((ui_language == LANG_EN) ? noSdEn : noSdDe);
+  const uint8_t itemCount = sdAvailable ? 2U : 1U;
+
+  if (frisch)
+  {
+    current_selection = 0; // sichere Vorgabe: Nein
+    frisch = false;
+    flag.menu_lcd_upd = false;
+  }
+
+  if (menuListHandleInput(current_selection, itemCount, 250))
+  {
+    if (sdAvailable && current_selection == 1)
+    {
+      char message[128] = {0};
+      const bool ok = ledAdaptationResetCurrentHead(message, sizeof(message));
+      if (VirtLCDMessage)
+      {
+        VirtLCDMessage->clear();
+        VirtLCDMessage->setCursor(1, 1);
+        VirtLCDMessage->print(message[0] ? message : (ok ? "OK" : "Fehler"));
+      }
+    }
+    frisch = true;
+    menu_level = MENU_CONTROL_PARAMETERS;
+    flag.menu_lcd_upd = false;
+    return;
+  }
+
+  if (!flag.menu_lcd_upd)
+  {
+    flag.menu_lcd_upd = true;
+    FirstBut = 0;
+    LastBut = 3;
+    VirtLCDMenu->clear();
+    VirtLCDMenu->setCursor(1, 1);
+    VirtLCDMenu->print(ui_language == LANG_EN ?
+                       "RESET LED LEARNING DATA" :
+                       "LED-LERNDATEN LÖSCHEN");
+    VirtLCDMenu->setCursor(1, 2);
+    if (sdAvailable)
+    {
+      snprintf(lcd_buf, 255, "%s K%05lu",
+               headTypeTextGet(), (unsigned long)(R.head_serial % 100000UL));
+      VirtLCDMenu->print(lcd_buf);
+      VirtLCDMenu->setCursor(1, 3);
+      VirtLCDMenu->print(ui_language == LANG_EN ?
+                         "Only this selected head" :
+                         "Nur dieser gewählte Kopf");
+    }
+    else
+    {
+      VirtLCDMenu->print(ui_language == LANG_EN ?
+                         "No SD card" : "Keine SD-Karte");
+    }
+    lcd_scroll_Menu(items, itemCount, current_selection, 5, 1, 4);
+    VirtLCDMenu->transfer();
+    ReadButtons(true);
+  }
+}
+
+
 // =========================================================================
 // ADC/PT100-MESSFILTER - Normal / Auto / Praezision
 // =========================================================================

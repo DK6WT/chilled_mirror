@@ -104,8 +104,14 @@ char  buffer[64];
 //******************************************************************************
 // Teil 1: System-Pins, Libraries und explizite, speichersichere Struktur
 //******************************************************************************
-#define VERSION "0.50.0"
-#define DATE    "11.07.2026"
+#include "TPsignedData.h"
+#include "TPsignedCalibration.h"
+#include "TPexternalCalibration.h"
+#include "TPcertifiedLog.h"
+#include "TPfirmwareIntegrity.h"
+#include "TPsystemFirmwareContext.h"
+#define VERSION TP_FIRMWARE_VERSION_STRING
+#define DATE    TP_FIRMWARE_BUILD_DATE_TEXT
 #define SENSOR  "STP-3000"
 
 #include <SPI.h>
@@ -123,6 +129,9 @@ char  buffer[64];
 #include "GSL1680.h"
 #include "EEPROMAnything.h"
 #include <TimeLib.h>
+#include <Entropy.h>
+#include <TP3000_uECC.h>
+#include "TPsha256.h"
 #if defined(__has_include)
   // Bevorzugt die im Quellpaket mitgelieferte WDT_T4-Kopie verwenden.
   // Dadurch ist der Hardware-Watchdog auch aktiv, wenn die Bibliothek nicht
@@ -151,7 +160,8 @@ static bool tp3000_hw_watchdog_started = false;
 static void tp3000WatchdogBegin()
 {
   WDT_timings_t config;
-  // Sekunden: Trigger 4 s, Reset 8 s. Gefuettert wird nur am Ende einer
+  // Sekunden: Trigger 4 s, Reset 8 s. Waehrend setup() wird nur an klaren
+  // Boot-Checkpoints gefuettert; nach setup() ausschliesslich am Ende einer
   // komplett durchlaufenen Hauptloop. Blockiert SD/Ethernet/Download laenger,
   // startet der Teensy automatisch neu.
   config.trigger = 4.0;
@@ -167,9 +177,19 @@ static inline void tp3000WatchdogFeed()
   if (!tp3000_hw_watchdog_started) return;
   tp3000_hw_watchdog.feed();
 }
+
+// Darf waehrend des Bootvorgangs und aus blockweise arbeitenden Startpruefungen
+// aufgerufen werden. Im normalen Messbetrieb wird der Watchdog weiterhin nur
+// am Ende einer vollstaendig durchlaufenen Hauptloop gefuettert.
+void tpFirmwareIntegrityBootService(void)
+{
+  if (!tp3000_hw_watchdog_started) return;
+  tp3000_hw_watchdog.feed();
+}
 #else
 static inline void tp3000WatchdogBegin() {}
 static inline void tp3000WatchdogFeed() {}
+void tpFirmwareIntegrityBootService(void) {}
 #endif
 
 // Hauptloop-Watchdog-Gate:
@@ -223,6 +243,9 @@ void interfaceApplySerialBaud(void);
 void sdLogBegin(void);
 void sdLogTask(void);
 bool sdLogReadyForLogging(void);
+bool sdLogEnsureReadyForAccess(void);
+void ledAdaptationBegin(void);
+void ledAdaptationTask(void);
 bool interfaceSdLoggingEnabled(void);
 void interfaceSdLoggingForceOff(void);
 void taupunktOffsetEnsureLoaded(void);
@@ -301,6 +324,9 @@ var_t R = {
   .optik_autocal_interval_index = OPTIK_AUTOCAL_INTERVAL_DEFAULT_INDEX
 };
 
+// Separat vom historischen var_t-Layout gespeichert. Die A/B-Regelparameter-
+// Slots verwenden dafuer ein bisher reserviertes Byte.
+uint8_t led_autoadaptation_mode = LED_AUTOADAPT_DEFAULT;
 uint8_t ui_language = LANG_DE;
 
 // =========================================================================
@@ -311,6 +337,12 @@ uint8_t ui_language = LANG_DE;
 
 bool loop_debug_display_enabled = false;
 uint8_t main_screen_layout = MAIN_SCREEN_LAYOUT_DEFAULT;
+
+// UTC-Offset der lokalen Geräte-RTC in Minuten (lokal = UTC + Offset).
+// Beispiel Deutschland Sommerzeit: +120. Der Offset wird beim Web-Zeitsync
+// vom Browser geliefert und im vorhandenen Device/UI-EEPROM-Block abgelegt.
+static int16_t tp_utc_offset_minutes = 0;
+static bool tp_utc_offset_valid = false;
 uint16_t loop_debug_hz = 0;
 uint32_t loop_debug_max_us = 0;
 uint32_t loop_debug_peak10_us = 0;     // hoechster Loop-Maxwert im laufenden 10-s-Fenster
@@ -329,7 +361,7 @@ static int loopDebugEepromMagicAddr()
   return 2310;
 }
 
-static int loopDebugEepromValueAddr()
+[[maybe_unused]] static int loopDebugEepromValueAddr()
 {
   return loopDebugEepromMagicAddr() + 1;
 }
@@ -361,7 +393,7 @@ void loopDebugDisplaySetEnabled(bool enabled)
 // ALTERNATIVER HAUPTSCREEN (Device-/UI-EEPROM-Block)
 // =========================================================================
 // Der Modus bleibt bewusst ausserhalb von var_t, damit bestehende
-// Regelparameter-Bloecke und Kopfkalibrierungen unveraendert bleiben.
+// Regelparameter-Bloecke und Kopfjustierungen unveraendert bleiben.
 
 static uint8_t mainScreenLayoutSanitize(uint8_t layout)
 {
@@ -385,6 +417,43 @@ void mainScreenLayoutLoad()
 }
 
 // =========================================================================
+// UTC-ZEITBASIS FUER SIGNIERTE DATEN
+// =========================================================================
+// Die Geräteanzeige und RTC bleiben in lokaler Zeit. Nur kryptografische
+// Zeitstempel werden mit dem gespeicherten UTC-Offset eindeutig umgerechnet.
+
+static bool tpUtcOffsetMinutesPlausible(int16_t minutes)
+{
+  return minutes >= -14 * 60 && minutes <= 14 * 60;
+}
+
+bool tpUtcOffsetValid(void)
+{
+  return tp_utc_offset_valid && tpUtcOffsetMinutesPlausible(tp_utc_offset_minutes);
+}
+
+int16_t tpUtcOffsetMinutesGet(void)
+{
+  return tpUtcOffsetValid() ? tp_utc_offset_minutes : 0;
+}
+
+bool tpUtcOffsetSetMinutes(int16_t minutes)
+{
+  if (!tpUtcOffsetMinutesPlausible(minutes)) return false;
+  tp_utc_offset_minutes = minutes;
+  tp_utc_offset_valid = true;
+  tpDeviceUiConfigSave();
+  return true;
+}
+
+int64_t tpCurrentUtcUnixTime(void)
+{
+  const time_t localTime = now();
+  if (localTime < (time_t)1577836800 || !tpUtcOffsetValid()) return 0;
+  return (int64_t)localTime - (int64_t)tp_utc_offset_minutes * 60LL;
+}
+
+// =========================================================================
 // ADC/PT100-MESSFILTER (separater EEPROM-Block)
 // =========================================================================
 // Der Modus bleibt bewusst ausserhalb von var_t, damit die bestehenden
@@ -398,7 +467,7 @@ static int adcFilterEepromMagicAddr()
   return 2320;
 }
 
-static int adcFilterEepromValueAddr()
+[[maybe_unused]] static int adcFilterEepromValueAddr()
 {
   return adcFilterEepromMagicAddr() + 1;
 }
@@ -439,7 +508,7 @@ static int adc1SfocalEepromMagicAddr()
   return 2330;
 }
 
-static int adc1SfocalEepromValueAddr()
+[[maybe_unused]] static int adc1SfocalEepromValueAddr()
 {
   return adc1SfocalEepromMagicAddr() + 1;
 }
@@ -478,7 +547,7 @@ static int peltierCurrentLimitEepromMagicAddr()
   return 2340;
 }
 
-static int peltierCurrentLimitEepromValueAddr()
+[[maybe_unused]] static int peltierCurrentLimitEepromValueAddr()
 {
   return peltierCurrentLimitEepromMagicAddr() + 1;
 }
@@ -709,6 +778,17 @@ bool FLASHMEM deviceSerialSet(const char* text)
   }
 
   candidate[DEVICE_SERIAL_DIGITS] = '\0';
+
+  // Nach erfolgreicher Provisionierung ist ausschliesslich die im
+  // Root-signierten Geraetezertifikat enthaltene SN verbindlich. Ein
+  // erneutes Setzen exakt derselben SN gilt als erfolgreich, damit
+  // bestehende Speicher-/Backup-Abläufe nicht unnoetig fehlschlagen.
+  if (deviceIdentityCertificateValid())
+  {
+    const char* certified = deviceIdentityCertifiedSerial();
+    return (certified != nullptr && strcmp(candidate, certified) == 0);
+  }
+
   strncpy(R.geraete_name, candidate, sizeof(R.geraete_name) - 1U);
   R.geraete_name[sizeof(R.geraete_name) - 1U] = '\0';
   return true;
@@ -716,6 +796,12 @@ bool FLASHMEM deviceSerialSet(const char* text)
 
 const char* FLASHMEM deviceSerialGet(void)
 {
+  if (deviceIdentityCertificateValid())
+  {
+    const char* certified = deviceIdentityCertifiedSerial();
+    if (certified != nullptr && certified[0] != '\0') return certified;
+  }
+
   deviceSerialNormalize(R.geraete_name, sizeof(R.geraete_name));
   return R.geraete_name;
 }
@@ -728,7 +814,7 @@ static void FLASHMEM headTypeTextSave()
   tpMainConfigSave();
 }
 
-static void FLASHMEM headTypeTextLoad()
+[[maybe_unused]] static void FLASHMEM headTypeTextLoad()
 {
   // Der alte Einzelblock wird nicht mehr gelesen; tpMainConfigLoad() befuellt den Text.
   headTypeTextNormalize(tp3000_head_type_text, sizeof(tp3000_head_type_text));
@@ -925,6 +1011,7 @@ static void FLASHMEM tpConfigSetAllDefaults(void)
   R.head_type = HEAD_TYPE_DEFAULT;
   R.head_serial = HEAD_SERIAL_DEFAULT;
   R.optik_autocal_interval_index = OPTIK_AUTOCAL_INTERVAL_DEFAULT_INDEX;
+  led_autoadaptation_mode = LED_AUTOADAPT_DEFAULT;
 
   strncpy(tp3000_head_type_text, HEAD_TYPE_DEFAULT_TEXT, sizeof(tp3000_head_type_text) - 1U);
   tp3000_head_type_text[sizeof(tp3000_head_type_text) - 1U] = '\0';
@@ -932,6 +1019,8 @@ static void FLASHMEM tpConfigSetAllDefaults(void)
   ui_language = LANG_DE;
   loop_debug_display_enabled = false;
   main_screen_layout = MAIN_SCREEN_LAYOUT_DEFAULT;
+  tp_utc_offset_minutes = 0;
+  tp_utc_offset_valid = false;
   adc_filter_mode = ADC_MEAS_FILTER_DEFAULT;
   adc1_sfocal_mode = ADC1_SFOCAL_DEFAULT;
   peltier_current_limit_ma = PELTIER_CURRENT_LIMIT_DEFAULT_MA;
@@ -998,6 +1087,11 @@ static bool FLASHMEM tpControlConfigSanitize(void)
     R.optik_autocal_interval_index = OPTIK_AUTOCAL_INTERVAL_DEFAULT_INDEX;
     changed = true;
   }
+  if (led_autoadaptation_mode > LED_AUTOADAPT_MAX)
+  {
+    led_autoadaptation_mode = LED_AUTOADAPT_DEFAULT;
+    changed = true;
+  }
 
   adc_filter_mode = adcFilterSanitize(adc_filter_mode);
   adc1_sfocal_mode = adc1SfocalSanitize(adc1_sfocal_mode);
@@ -1062,6 +1156,13 @@ static bool FLASHMEM tpDeviceUiConfigSanitize(void)
     changed = true;
   }
 
+  if (tp_utc_offset_valid && !tpUtcOffsetMinutesPlausible(tp_utc_offset_minutes))
+  {
+    tp_utc_offset_minutes = 0;
+    tp_utc_offset_valid = false;
+    changed = true;
+  }
+
   return changed;
 }
 
@@ -1090,7 +1191,9 @@ typedef struct
   uint8_t  adc_filter_mode;
   uint8_t  adc1_sfocal_mode;
   uint16_t peltier_current_limit_ma;
-  uint8_t  reserved[27];
+  // Kodierung 1..3. Der alte reservierte Nullwert bedeutet Migration auf Default.
+  uint8_t  led_autoadaptation_mode_encoded;
+  uint8_t  reserved[26];
 } tp_control_config_payload_t;
 
 typedef struct
@@ -1132,6 +1235,8 @@ static void FLASHMEM tpControlConfigPayloadFromRuntime(tp_control_config_payload
   payload.adc_filter_mode = adcFilterModeGet();
   payload.adc1_sfocal_mode = adc1SfocalModeGet();
   payload.peltier_current_limit_ma = peltierCurrentLimitGetMa();
+  payload.led_autoadaptation_mode_encoded =
+      (uint8_t)(led_autoadaptation_mode + 1U);
 }
 
 static void FLASHMEM tpControlConfigApplyPayload(const tp_control_config_payload_t& payload)
@@ -1150,6 +1255,17 @@ static void FLASHMEM tpControlConfigApplyPayload(const tp_control_config_payload
   adc_filter_mode = adcFilterSanitize(payload.adc_filter_mode);
   adc1_sfocal_mode = adc1SfocalSanitize(payload.adc1_sfocal_mode);
   peltier_current_limit_ma = peltierCurrentLimitSanitizeMa(payload.peltier_current_limit_ma);
+  if (payload.led_autoadaptation_mode_encoded >= 1U &&
+      payload.led_autoadaptation_mode_encoded <= (LED_AUTOADAPT_MAX + 1U))
+  {
+    led_autoadaptation_mode =
+        (uint8_t)(payload.led_autoadaptation_mode_encoded - 1U);
+  }
+  else
+  {
+    // Alte V1-Slots hatten an dieser Stelle ein reserviertes Nullbyte.
+    led_autoadaptation_mode = LED_AUTOADAPT_DEFAULT;
+  }
 }
 
 static bool FLASHMEM tpControlConfigReadSlot(uint8_t slot, tp_control_config_slot_t& out)
@@ -1295,8 +1411,14 @@ static void FLASHMEM tpDeviceUiConfigPayloadFromRuntime(tp_device_ui_config_payl
   payload.head_serial = R.head_serial;
   strncpy(payload.device_sn, deviceSerialGet(), sizeof(payload.device_sn) - 1U);
   headTypeTextNormalize(tp3000_head_type_text, sizeof(tp3000_head_type_text));
-  strncpy(payload.head_type_text, tp3000_head_type_text, sizeof(payload.head_type_text) - 1U);
+  const size_t headTypeLength = strnlen(tp3000_head_type_text,
+                                        sizeof(payload.head_type_text) - 1U);
+  memcpy(payload.head_type_text, tp3000_head_type_text, headTypeLength);
+  payload.head_type_text[headTypeLength] = '\0';
   payload.main_screen_layout = mainScreenLayoutGet();
+  payload.reserved[0] = tpUtcOffsetValid() ? 1U : 0U;
+  payload.reserved[1] = (uint8_t)((uint16_t)tp_utc_offset_minutes & 0xFFU);
+  payload.reserved[2] = (uint8_t)(((uint16_t)tp_utc_offset_minutes >> 8) & 0xFFU);
 }
 
 static void FLASHMEM tpDeviceUiConfigApplyPayload(const tp_device_ui_config_payload_t& payload)
@@ -1314,6 +1436,15 @@ static void FLASHMEM tpDeviceUiConfigApplyPayload(const tp_device_ui_config_payl
   tp3000_head_type_text[sizeof(tp3000_head_type_text) - 1U] = '\0';
 
   main_screen_layout = mainScreenLayoutSanitize(payload.main_screen_layout);
+
+  tp_utc_offset_valid = (payload.reserved[0] == 1U);
+  tp_utc_offset_minutes = (int16_t)((uint16_t)payload.reserved[1] |
+                                    ((uint16_t)payload.reserved[2] << 8));
+  if (!tpUtcOffsetMinutesPlausible(tp_utc_offset_minutes))
+  {
+    tp_utc_offset_minutes = 0;
+    tp_utc_offset_valid = false;
+  }
 }
 
 static bool FLASHMEM tpDeviceUiConfigReadSlot(uint8_t slot, tp_device_ui_config_slot_t& out)
@@ -1417,6 +1548,10 @@ void FLASHMEM tpMainConfigSave(void)
 {
   tpControlConfigSaveInternal();
   tpDeviceUiConfigSave();
+  // Jede Änderung des Hauptblocks kann kopfbezogene Justier-/Regelwerte
+  // betreffen. Die Kalibrierungsverwaltung vergleicht den tatsächlichen
+  // Zustand und schreibt nur bei einer echten relevanten Abweichung ein Ende.
+  tpSignedCalibrationInvalidateCache();
 }
 
 bool FLASHMEM tpMainConfigLoad(void)
@@ -1460,9 +1595,8 @@ void setupTouchLatchUntilRelease(void)
 char lcd_buf[256]; 
 char incoming_command_string[50];
 
-// Die grossen TextBox-Objekte enthalten jeweils zwei 1800-Byte-Zeichenpuffer.
-// Sie liegen bewusst in RAM2 (DMAMEM), damit RAM1 fuer Stack, Regelung,
-// Safety und die Ethernet/FNET-Library frei bleibt.
+// Die grossen Dashboard-TextBoxen enthalten jeweils zwei 1800-Byte-
+// Zeichenpuffer und bleiben in RAM2 (DMAMEM).
 DMAMEM TextBox VirtLCDUeberschrift;
 DMAMEM TextBox VirtLCDTemperaturen;
 DMAMEM TextBox VirtLCDGrossanzeige;
@@ -1470,9 +1604,17 @@ DMAMEM TextBox VirtLCDStatuszeile;
 // Zusatzwert unter dem Chart (Feuchte bzw. Taupunkt) mit zeichenweisem
 // Update wie die bestehenden Dashboard-TextBoxen. Bewusst in RAM2.
 DMAMEM TextBox VirtLCDChartZusatzwert;
-TextBox* VirtLCDMenu = nullptr;
 DMAMEM TextBox RTC_PM;
-TextBox* VirtLCDMessage = nullptr;
+
+// Menü- und Meldungsbox werden statisch bereitgestellt. Damit gibt es beim
+// Booten kein operator new() mehr, das bei knappem/fragmentiertem RAM2-Heap
+// nullptr liefern und anschließend im compilererzeugten memset() abstürzen
+// kann. Die Objekte liegen bewusst in RAM1; die DroidSansMono-Fonttabellen
+// wurden dafür vollständig in den QSPI-Flash verschoben.
+static TextBox VirtLCDMenuStorage;
+static TextBox VirtLCDMessageStorage;
+TextBox* VirtLCDMenu = &VirtLCDMenuStorage;
+TextBox* VirtLCDMessage = &VirtLCDMessageStorage;
 
 // =============================================================================
 // PROTOTYPEN-DEKLARATIONEN (Echte Funktions-Verknüpfungen)
@@ -1647,17 +1789,11 @@ static inline void tftTransferWait()
 
 static void initMenuTextBoxesIfNeeded()
 {
-  // WICHTIG:
-  // Kein delete/new bei jedem Touch mehr. Das verhindert Heap-Fragmentierung.
-  if (VirtLCDMenu == nullptr) {
-    VirtLCDMenu = new TextBox();
-  }
+  // Statische Objekte: kein delete/new und damit keine Heap-Fragmentierung
+  // oder Nullzeigergefahr beim erneuten Eintritt ins Setup.
+  if (VirtLCDMenu == nullptr || VirtLCDMessage == nullptr) return;
 
-  if (VirtLCDMessage == nullptr) {
-    VirtLCDMessage = new TextBox();
-  }
-
-  // Beim Eintritt ins Menü nur neu initialisieren/clearen, aber nicht löschen/freigeben.
+  // Beim Eintritt ins Menü nur neu initialisieren/clearen.
   VirtLCDMenu->init(45, 12, 155, 40, DroidSansMono_20, WHITE, BLACK);
   VirtLCDMenu->clear();
   VirtLCDMenu->invalidate();
@@ -1767,6 +1903,8 @@ bool ra8875WaitReady(uint16_t timeout_ms)
 // Teensy-CrashReport bleiben bis zum nächsten Neustart abrufbar.
 static uint32_t systemBootResetStatusRaw = 0;
 static bool systemBootCrashReportAvailable = false;
+static bool systemBootWatchdogReset = false;
+static bool systemBootRecoveryRequired = false;
 
 uint32_t systemGetBootResetStatusRaw(void)
 {
@@ -1776,6 +1914,81 @@ uint32_t systemGetBootResetStatusRaw(void)
 bool systemGetBootCrashReportAvailable(void)
 {
   return systemBootCrashReportAvailable;
+}
+
+// Fruehe Boot-/Crashdiagnose auf der internen SD-Karte. Der Pfad liegt im
+// Kartenwurzelverzeichnis, damit er ohne Weboberflaeche sofort auffindbar ist.
+// Jede Ausgabe wird geschlossen und damit vor einer nachfolgenden Stoerung
+// sicher auf die Karte geschrieben. CrashReport.printTo() loescht den Bericht
+// nach erfolgreicher Ausgabe; deshalb hat die SD-Ausgabe Vorrang vor Serial.
+static const char TP_BOOT_DIAG_PATH[] = "/TP3000_BOOT.TXT";
+static bool tpBootDiagSdAttempted = false;
+static bool tpBootDiagSdReady = false;
+static bool tpBootDiagCrashStored = false;
+
+static bool tpBootDiagEnsureSd(void)
+{
+  if (tpBootDiagSdAttempted) return tpBootDiagSdReady;
+  tpBootDiagSdAttempted = true;
+  tpFirmwareIntegrityBootService();
+  tpBootDiagSdReady = sdLogEnsureReadyForAccess();
+  tpFirmwareIntegrityBootService();
+  return tpBootDiagSdReady;
+}
+
+static bool tpBootDiagAppend(const char* stage, bool includeCrashReport)
+{
+  if (stage == nullptr || !tpBootDiagEnsureSd()) return false;
+
+  // Ein unbegrenzt wachsendes Diagnosefile vermeiden. Nach 128 KiB beginnt
+  // automatisch eine neue Datei; fuer die Fehlersuche bleiben viele Starts.
+  if (SD.exists(TP_BOOT_DIAG_PATH))
+  {
+    File previous = SD.open(TP_BOOT_DIAG_PATH, FILE_READ);
+    const bool rotate = previous && previous.size() > 131072UL;
+    if (previous) previous.close();
+    if (rotate) SD.remove(TP_BOOT_DIAG_PATH);
+  }
+
+  tpFirmwareIntegrityBootService();
+  File logFile = SD.open(TP_BOOT_DIAG_PATH, FILE_WRITE);
+  if (!logFile) return false;
+
+  logFile.println("============================================================");
+  logFile.print("Build: ");
+  logFile.print(TP_FIRMWARE_VERSION_STRING);
+  logFile.print(" / ");
+  logFile.println(TP_FIRMWARE_BUILD_ID_STRING);
+  const uint32_t linkedImageSize = tpFirmwareIntegrityLinkedImageSize();
+  logFile.println("Firmware ImageBase: 0x60000000");
+  logFile.print("Firmware ImageSize: ");
+  logFile.println((unsigned long)linkedImageSize);
+  logFile.print("Firmware ImageEnd: 0x");
+  logFile.println(0x60000000UL + linkedImageSize, HEX);
+  logFile.print("Millis: ");
+  logFile.println((unsigned long)millis());
+  logFile.print("Reset SRC_SRSR: 0x");
+  logFile.println(systemBootResetStatusRaw, HEX);
+  logFile.print("CrashReport vorhanden: ");
+  logFile.println(systemBootCrashReportAvailable ? "JA" : "NEIN");
+  logFile.print("Watchdog-Reset: ");
+  logFile.println(systemBootWatchdogReset ? "JA" : "NEIN");
+  logFile.print("Diagnose-Wiederanlauf: ");
+  logFile.println(systemBootRecoveryRequired ? "JA" : "NEIN");
+  logFile.print("Stufe: ");
+  logFile.println(stage);
+
+  if (includeCrashReport && systemBootCrashReportAvailable)
+  {
+    logFile.println("Gespeicherter Teensy CrashReport:");
+    logFile.print(CrashReport);
+    tpBootDiagCrashStored = true;
+  }
+
+  logFile.flush();
+  logFile.close();
+  tpFirmwareIntegrityBootService();
+  return true;
 }
 
 //=========================================================
@@ -1795,10 +2008,24 @@ bool ethernetWebSetupSessionActive(void);
 void setup() {
 #if defined(__IMXRT1062__)
   systemBootResetStatusRaw = SRC_SRSR;
+  systemBootWatchdogReset =
+      (systemBootResetStatusRaw & (SRC_SRSR_WDOG_RST_B | SRC_SRSR_WDOG3_RST_B)) != 0U;
 #else
   systemBootResetStatusRaw = 0;
+  systemBootWatchdogReset = false;
 #endif
   systemBootCrashReportAvailable = (bool)CrashReport;
+  systemBootRecoveryRequired =
+      systemBootCrashReportAvailable || systemBootWatchdogReset;
+  if (!systemBootCrashReportAvailable)
+    CrashReport.breadcrumb(1, 0x54503001UL); // TP0, setup gestartet
+
+  // Ein durch einen vorherigen Lauf bereits aktiver Hardware-Watchdog kann
+  // einen Reset ueberleben. Deshalb sofort neu initialisieren und waehrend des
+  // gesamten Bootvorgangs an definierten Checkpoints fuettern. Erst nach setup()
+  // gilt wieder strikt: Feed nur am Ende einer vollstaendigen Hauptloop.
+  tp3000WatchdogBegin();
+  tpFirmwareIntegrityBootService();
   
   // Hardware-Eingangspins vorbereiten (Mit deinen realen Konstanten)
   pinMode(pinWaitDisp, INPUT_PULLUP);   
@@ -1856,7 +2083,8 @@ void setup() {
   analogWrite(pinPwmFan, 4000); 
   analogWrite(pinEn, 4096); 
   analogWrite(pinPh, 4096); 
-  delay(250); 
+  delay(250);
+  tpFirmwareIntegrityBootService();
 
   // EEPROM V10: saubere Hauptkonfiguration laden.
   // Der alte 0xAA-Marker und der alte var_t-Dump werden nicht mehr benutzt.
@@ -1880,6 +2108,7 @@ void setup() {
   // schwarzen Boot vor dem TFT erzeugen.
   interfaceConfigLoad();
   interfaceApplySerialBaud();
+  tpFirmwareIntegrityBootService();
 
   // =========================================================================
   // SCHRITT 1: BUS ANMELDEN & TOUCH UNGESTÖRT INITIALISIEREN (Wire1)
@@ -1890,14 +2119,24 @@ void setup() {
   //Wire1.setClock(400000); 
   //delay(50); // Dem Bus Zeit zum elektrischen Stabilisieren geben
 
-  tft.begin(RA8875_800x480, 16, 20000000, 8000000); 
+  tft.begin(RA8875_800x480, 16, 20000000, 8000000);
+  if (!systemBootCrashReportAvailable)
+    CrashReport.breadcrumb(1, 0x54503002UL); // TP0, TFT initialisiert
+  tpFirmwareIntegrityBootService();
   // Startet den GSL1680. Da Wire1 nun im Hauptcode bereits wach ist,
   // funktioniert der Firmware-Upload über die Pins 16/17 jetzt absolut fehlerfrei!
   TS.begin(-1, TC_INT);
+  tpFirmwareIntegrityBootService();
   tft.setRotation(0);
   
   // Zeichnet das Erdbild auf den Schirm
   tft.writeRect(0, 0, 800, 480, (uint16_t*)earth);
+
+  // Individuellen Geraeteschluessel und ein eventuell vorhandenes
+  // Root-signiertes Geraetezertifikat laden und kryptografisch pruefen.
+  // Erst ab hier kann die zertifizierte SN die vorlaeufige EEPROM-SN ersetzen.
+  deviceIdentityBegin();
+  tpFirmwareIntegrityBootService();
   
   tft.setFont(DroidSansMono_28);
   tft.setTextColor(BLACK);
@@ -1959,18 +2198,72 @@ tft.setCursor(1, 457);  tft.print(T(TXT_BOOT_BASED_ON));
   for (int progress_bar = 0; progress_bar <= 800; progress_bar++) {
     delay(4);
     tft.fillRoundRect(0, 475, progress_bar, 5, 0, GREEN);
+    if ((progress_bar % 25) == 0) tpFirmwareIntegrityBootService();
   }
   
-  // PC-Debug-Schnittstelle zünden
+  // PC-Debug-Schnittstelle und vor allem die abziehbare SD-Bootdiagnose.
+  // Ein gespeicherter CrashReport wird zuerst auf SD geschrieben, weil seine
+  // Ausgabe den Teensy-Core-Bericht anschliessend loescht.
   Serial.begin(115200);
   delay(10);
+  const bool bootDiagWritten =
+      tpBootDiagAppend("BOOT VOR FIRMWAREHASH", systemBootCrashReportAvailable);
+#if defined(__IMXRT1062__)
+  // Watchdog-Resetursache nach dem sicheren SD-Eintrag quittieren, damit der
+  // Diagnose-Wiederanlauf wirklich nur einmal erfolgt. CrashReport.printTo()
+  // quittiert den Resetstatus selbst; bei einem noch nicht gesicherten Bericht
+  // bleibt er dagegen bewusst unangetastet.
+  if (!systemBootCrashReportAvailable && systemBootWatchdogReset)
+    SRC_SRSR = systemBootResetStatusRaw;
+#endif
   Serial.print("BOOT: SRC_SRSR=0x");
   Serial.println(systemBootResetStatusRaw, HEX);
   if (systemBootCrashReportAvailable)
   {
-    Serial.println("BOOT: Teensy CrashReport vorhanden:");
-    Serial.print(CrashReport);
+    if (tpBootDiagCrashStored)
+      Serial.println("BOOT: CrashReport auf /TP3000_BOOT.TXT gespeichert");
+    else
+    {
+      // Nicht seriell ausgeben: CrashReport.printTo() wuerde den einzigen
+      // gespeicherten Bericht loeschen. Er bleibt fuer einen spaeteren
+      // SD-Schreibversuch erhalten.
+      Serial.println("BOOT: SD-Diagnose fehlgeschlagen, CrashReport bleibt gespeichert");
+    }
   }
+  else if (!bootDiagWritten)
+  {
+    Serial.println("BOOT: SD-Diagnosedatei konnte nicht geschrieben werden");
+  }
+
+  // Das tatsaechlich gelinkte Firmwareabbild hashen, bevor Netzwerk,
+  // Kalibrierimporte oder zertifizierte Logs gestartet werden. Nach einem
+  // gespeicherten MPU-Crash oder Watchdog-Reset wird dieser Start ohne Hash
+  // fortgesetzt. Dadurch kommt das Geraet aus der Bootschleife und der Bericht
+  // kann von der SD-Karte geholt werden; zertifizierte Funktionen bleiben zu.
+  const bool bootBreadcrumbsWritable =
+      !systemBootCrashReportAvailable || tpBootDiagCrashStored;
+  if (bootBreadcrumbsWritable)
+  {
+    CrashReport.breadcrumb(1, 0x54503003UL); // TP0, vor Firmwarehash
+    CrashReport.breadcrumb(2, 0U);          // letzter kompletter Hash-Offset
+  }
+  (void)tpBootDiagAppend("FIRMWAREHASH START", false);
+  const uint32_t firmwareHashStartedMs = millis();
+  if (systemBootRecoveryRequired)
+    tpFirmwareIntegritySkipAfterBootCrash();
+  else
+    tpFirmwareIntegrityBegin();
+  const uint32_t firmwareHashDurationMs = millis() - firmwareHashStartedMs;
+  if (bootBreadcrumbsWritable)
+    CrashReport.breadcrumb(1, 0x54503004UL); // TP0, Firmwarehash verlassen
+
+  Serial.print("FIRMWARE INTEGRITY: ");
+  Serial.println(tpFirmwareIntegrityStatusText());
+  Serial.print("FIRMWARE HASH DAUER: ");
+  Serial.print(firmwareHashDurationMs);
+  Serial.println(" ms");
+  (void)tpBootDiagAppend(tpFirmwareIntegrityStatusText(), false);
+  tpFirmwareIntegrityBootService();
 
   // Schnittstellen erst nach sichtbarem TFT-Bootscreen starten.
   // ethernetServiceBegin() startet Ethernet erst nach sichtbarem TFT-Bootscreen.
@@ -1978,10 +2271,25 @@ tft.setCursor(1, 457);  tft.print(T(TXT_BOOT_BASED_ON));
   serialProtocolBegin();
   ethernetServiceBegin();
   winControlOutBegin();
+  tpFirmwareIntegrityBootService();
+
+  // Externe PDF-Kalibrierscheine und signierte Justierungen werden vor dem
+  // Logger geladen. Der zertifizierte Logger kann dadurch beim Start einen
+  // unterbrochenen Abschnitt mit exakt der gespeicherten Evidenz versiegeln.
+  tpExternalCalibrationBegin();
+  tpFirmwareIntegrityBootService();
+  tpSignedCalibrationBegin();
+  tpFirmwareIntegrityBootService();
+
+  // LED-Grundkurve und kopfbezogenes Lernmodell liegen vorerst auf SD.
+  // Ohne SD wird die Autoadaption sicher auf AUS gesetzt.
+  ledAdaptationBegin();
+  tpFirmwareIntegrityBootService();
 
   if (interfaceSdLoggingEnabled())
   {
     sdLogBegin();
+    tpFirmwareIntegrityBootService();
   }
 
   serialProtocolTraceBegin();
@@ -1991,18 +2299,16 @@ tft.setCursor(1, 457);  tft.print(T(TXT_BOOT_BASED_ON));
   // =========================================================================
   VirtLCDUeberschrift.init(50, 1, 8, 15, DroidSansMono_20, WHITE, BLACK);
   VirtLCDTemperaturen.init(25, 4, 440, 355, DroidSansMono_20, YELLOW, BLACK);
-  VirtLCDGrossanzeige.init(25, 4, 90, 110, DroidSansMono_60, WHITE, BLACK);
+  VirtLCDGrossanzeige.init(10, 2, 252, 110, DroidSansMono_60, WHITE, BLACK);
   VirtLCDStatuszeile.init(45, 1, 186, 427, DroidSansMono_20, WHITE, BLACK);
   VirtLCDChartZusatzwert.init(20, 1, 100, 355, DroidSansMono_20, YELLOW, BLACK);
   RTC_PM.init(15, 1, 660, 15, DroidSansMono_20, GREEN, BLACK);
 
-  // Menü-/Nachrichtenboxen einmalig anlegen.
-  // Danach nur noch init()/clear(), kein delete/new beim Touch.
-  VirtLCDMenu = new TextBox();
+  // Statisch bereitgestellte Menü-/Nachrichtenboxen initialisieren.
+  // Es findet an dieser Stelle keinerlei Heap-Allokation mehr statt.
   VirtLCDMenu->init(45, 12, 155, 40, DroidSansMono_20, WHITE, BLACK);
   VirtLCDMenu->clear();
 
-  VirtLCDMessage = new TextBox();
   VirtLCDMessage->init(40, 10, 200, 150, DroidSansMono_20, YELLOW, BLACK);
 
   // =========================================================================
@@ -2015,6 +2321,13 @@ tft.setCursor(1, 457);  tft.print(T(TXT_BOOT_BASED_ON));
   // Klima-Bus (Wire2) für RV-3129 RTC und den BMP585 Drucksensor wecken
   initI2C2Peripherie();
   delay(5);
+  tpFirmwareIntegrityBootService();
+
+  // Jetzt stehen RTC und SD bereit. Das Hersteller-Root-Firmwarezertifikat wird
+  // geladen, gegen den gemessenen Hash geprüft und der Status transaktional
+  // unter /CERTIFICATION/FIRMWARE.TPS dokumentiert.
+  tpFirmwareIntegrityFinalizeStartup(tpCurrentUtcUnixTime());
+  tpFirmwareIntegrityBootService();
   
 
   // Touch ist ab hier initialisiert und wird direkt im loop() gelesen.
@@ -2050,13 +2363,17 @@ tft.setCursor(1, 457);  tft.print(T(TXT_BOOT_BASED_ON));
   initADS1263();
 
   // Sicherheitsueberwachung erst ganz am Ende des Bootvorgangs starten.
-  // Waehrend Boot/SD/Display-Init stehen die DRV-Eingaenge bereits auf HIGH/HIGH, aber es gibt noch keinen Loop-Feed.
+  // Waehrend Boot/SD/Display-Init stehen die DRV-Eingaenge bereits auf HIGH/HIGH;
+  // der Hardware-Watchdog wird bis hier nur an kontrollierten Boot-Checkpoints gefuettert.
   safetyInit();
 
-  // Letzte Rettungsleine gegen blockierende Library-Aufrufe. Der Watchdog wird
-  // erst nach dem kompletten Boot aktiviert und danach nur am Ende einer voll
-  // durchlaufenen Hauptloop gefuettert.
-  tp3000WatchdogBegin();
+  // Der Watchdog wurde bereits ganz am Anfang des Bootvorgangs aktiviert und
+  // dort nur an kontrollierten Boot-Checkpoints gefuettert. Ab jetzt erfolgt
+  // der Feed ausschliesslich am Ende einer vollstaendig durchlaufenen Hauptloop.
+  if (bootBreadcrumbsWritable)
+    CrashReport.breadcrumb(1, 0x54503005UL); // TP0, setup vollstaendig
+  (void)tpBootDiagAppend("SETUP VOLLSTAENDIG", false);
+  tp3000WatchdogFeed();
 }
 
 void loop() {
@@ -2105,8 +2422,8 @@ void loop() {
       bool alarm_touch_consumed = alarmTouchAcknowledge(TouchX, TouchY);
 
       if (!alarm_touch_consumed &&
-          mode_display == 0 &&
-          mainDisplayChartRangeHit(TouchX, TouchY))
+               mode_display == 0 &&
+               mainDisplayChartRangeHit(TouchX, TouchY))
       {
         mainDisplayCycleChartRange();
       }
@@ -2145,6 +2462,9 @@ void loop() {
   ads1263ServiceAdc2Background();
   checkDRV8873SFaults(); 
   verarbeiteRegelung();
+  // Temperaturvorsteuerung nur im normalen Messbetrieb; Freiheizen,
+  // Dunkelmessung und LED-Auto-Cal bleiben davon strikt getrennt.
+  ledAdaptationTask();
   safetyFeedRegelung();
   safetyTask();
   alarmTask();
@@ -2199,15 +2519,17 @@ if (slowMetro.check()) {
       setup_touch_latch = false;
     }
 
-    if (!flag.config_mode && !ethernetWebSetupSessionActive()) {
-      bool setup_touch_now =
-        TouchZ &&
-        TouchX > 10 && TouchX < 150 &&
-        TouchY > 380 && TouchY < 460;
+    if (!flag.config_mode) {
+      if (!ethernetWebSetupSessionActive()) {
+        const bool setup_touch_now =
+          TouchZ &&
+          TouchX > 10 && TouchX < 150 &&
+          TouchY > 380 && TouchY < 460;
 
-      if (setup_touch_now && !setup_touch_latch) {
-        setup_touch_latch = true;
-        enterConfigModeFromTouch();
+        if (setup_touch_now && !setup_touch_latch) {
+          setup_touch_latch = true;
+          enterConfigModeFromTouch();
+        }
       }
     }
   

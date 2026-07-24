@@ -1,0 +1,12 @@
+QRCode for JavaScript
+=====================
+
+Copyright (c) 2009 Kazuhiko Arase
+
+The browser-side QR implementation embedded in TPethernet.ino is adapted for
+TP-3000 from QRCode for JavaScript and is used under the MIT License.
+The complete MIT text is available in LICENSES/MIT.txt.
+
+Project source: https://github.com/kazuhikoarase/qrcode-generator
+
+QR Code is a registered trademark of DENSO WAVE INCORPORATED.

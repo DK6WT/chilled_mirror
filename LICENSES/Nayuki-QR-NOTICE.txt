@@ -1,0 +1,15 @@
+Project Nayuki QR Code generator
+================================
+
+Copyright (c) Project Nayuki
+
+The reduced native QR construction algorithm in TPqrCode.cpp/TPqrCode.h is
+adapted from Project Nayuki's QR Code generator library under the MIT License.
+The complete MIT text is available in LICENSES/MIT.txt.
+
+Project page: https://www.nayuki.io/page/qr-code-generator-library
+Source repository: https://github.com/nayuki/QR-Code-generator
+
+The TP-3000 adapter and surrounding integration are distributed under the
+project's GPL-3.0-only license; the upstream Nayuki copyright and MIT grant are
+retained here.

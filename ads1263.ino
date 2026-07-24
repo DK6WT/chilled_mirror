@@ -1884,7 +1884,9 @@ bool ads1263Adc2MeasureDark()
     {
       while ((int32_t)(micros() - nextUs) < 0)
       {
-        // kurze Wartezeit, ADC1 laeuft beim Start noch nicht im Messkarussell
+        // Kurze Wartezeit zwischen den ADC2-Stichproben. Beim Start ist
+        // ADC1 noch nicht im Messkarussell; waehrend einer Auto-Cal pausiert
+        // der Hauptloop hier bewusst kurz, ohne die ADC1-Konfiguration zu aendern.
       }
     }
 
@@ -2183,7 +2185,8 @@ void initADS1263()
 
   delay(10);
 
-  // ADC2-Dunkelwert einmalig beim Start ermitteln.
+  // ADC2-Dunkelwert beim Start erstmals ermitteln. Danach wird er vor
+  // jeder Optik-/LED-Auto-Cal erneut gemessen.
   // LED_OFF bleibt dabei HIGH und somit sicher aus, bis der Regler per setTargetCurrent() freigibt.
   if (ads1263Adc2MeasureDark())
   {

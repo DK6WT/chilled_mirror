@@ -31,10 +31,20 @@ __pycache__/
 
 # Measurement and log data
 *.csv
+*.CSV
 *.log
+
+# Documented SD-card templates are intentionally tracked
+!SD_CARD_TEMPLATE/**/*.csv
+!SD_CARD_TEMPLATE/**/*.CSV
 
 # Local archives; publish release ZIPs as GitHub release assets instead
 *.zip
 
 # Panel-specific GSL1680 firmware is obtained directly from the display vendor
 external/GSL1680/gslX680_311_5_F.h
+
+# Device identity/provisioning runtime artifacts and private keys
+*.tpreq
+*.tpcert
+*_PRIVATE.pem

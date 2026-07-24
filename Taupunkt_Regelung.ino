@@ -52,11 +52,15 @@ extern var_t R;
 extern double amp_avg;
 
 extern void setTargetCurrent(float currentMA);
+extern void ledAdaptationOnAutoCalBegin(void);
+extern void ledAdaptationOnAutoCalSuccess(float ambientTempC, float ledCurrentMa);
+extern void ledAdaptationOnAutoCalFailure(void);
 // ADC2 Photodiode: Brutto = echte ADC-Aussteuerung, Netto = Dunkelwert abgezogen.
 // Wichtig: LED-Autoeichung nutzt Brutto, Reflexionsregelung nutzt Netto.
 extern int32_t ads1263Adc2GetAvg();
 extern int32_t ads1263Adc2GetDark();
 extern int32_t ads1263Adc2GetNet();
+extern bool ads1263Adc2MeasureDark();
 extern void adc1SfocalAutoCalEvent();
 void berechnePräziseTemperaturen();
 
@@ -370,6 +374,7 @@ static void optikAbortAblaufBeiSafety(unsigned long nowMs)
 
   optikResetFreiheizStabilitaet();
   optikResetAutoCalState(nowMs);
+  ledAdaptationOnAutoCalFailure();
 
   integralFehler = 0.0f;
   letzterFehler = 0.0f;
@@ -439,8 +444,27 @@ static void optikAblaufEnterIfNeeded()
   }
   else if (ablaufStatus == 2)
   {
+    // Vor jeder LED-Auto-Cal den ADC2-Dunkelwert neu erfassen. Die Messung
+    // schaltet die LED hardwareseitig aus, wartet auf das Einschwingen,
+    // mittelt 64 ADC2-Werte und setzt danach den Lichtpuffer sauber zurück.
+    // Erst anschließend beginnt die eigentliche Auto-Cal mit frischer
+    // Dunkelwertkorrektur und neu gestarteter Zeitbasis.
+    bool darkOk = ads1263Adc2MeasureDark();
+    nowMs = millis();
+    statusTimer = nowMs;
     optikResetAutoCalState(nowMs);
     autoCalLastStepMs = nowMs;
+
+    if (darkOk)
+    {
+      Serial.print("ADS1263 ADC2 dark Auto-Cal=");
+      Serial.println((long)ads1263Adc2GetDark());
+    }
+    else
+    {
+      Serial.println("WARNUNG: ADS1263 ADC2 dark vor Auto-Cal nicht erneuert.");
+    }
+
     setTargetCurrent(aktuelleLedStromVorgabe);
   }
 }
@@ -920,6 +944,7 @@ void ausfuehrungRegelAlgorithmus()
 
         integralFehler = 0.0f;
         letzterFehler = 0.0f;
+        ledAdaptationOnAutoCalBegin();
         aktuelleLedStromVorgabe = 10.0f;
 
         gewuenschterStromStellwert = 0.0f;
@@ -1048,6 +1073,7 @@ void ausfuehrungRegelAlgorithmus()
           // Die Trockenreferenz dagegen bleibt dunkelstromkorrigiert.
           optikTrockenReferenz = optikReflexion;
           optikHealthAutoCalAbschluss(true, false, optikAdcBrutto, noisePp);
+          ledAdaptationOnAutoCalSuccess(tempUmgebung, aktuelleLedStromVorgabe);
 
           ablaufStatus = 0;
           statusTimer = nowMs;
@@ -1064,6 +1090,7 @@ void ausfuehrungRegelAlgorithmus()
         optikTrockenReferenz = (optikReflexion > 1000.0f) ? optikReflexion : 15000.0f;
         optikHealthAutoCalAbschluss(false, true, optikAdcBrutto,
                                     autoCalStableInit ? (autoCalStableMax - autoCalStableMin) : 0.0f);
+        ledAdaptationOnAutoCalFailure();
 
         ablaufStatus = 0;
         statusTimer = nowMs;
@@ -1081,6 +1108,7 @@ void ausfuehrungRegelAlgorithmus()
 
       integralFehler = 0.0f;
       letzterFehler = 0.0f;
+      ledAdaptationOnAutoCalBegin();
       gewuenschterStromStellwert = 0.0f;
     }
     break;

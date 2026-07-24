@@ -1,0 +1,12 @@
+micro-ecc 1.0.0
+================
+
+Copyright (c) 2014, Kenneth MacKay
+
+The project-local copy in libraries/TP3000_micro_ecc contains the upstream
+micro-ecc implementation plus TP-3000 configuration and Teensy 4.x section
+placement. The cryptographic algorithm was not substantively changed.
+
+License: BSD-2-Clause
+Full text: libraries/TP3000_micro_ecc/LICENSE.txt and
+LICENSES/BSD-2-Clause.txt

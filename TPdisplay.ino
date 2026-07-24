@@ -297,9 +297,141 @@ enum MainDashboardView : uint8_t
 static uint8_t mainDashboardView = MAIN_DASH_VALUES;
 static uint8_t mainDashboardLastLayout = 0xFF;
 
-static bool mainDashboardAltValuesLayout()
+// Beide Zahlenansichten besitzen getrennte TFT-Textgeometrien.
+// Der 3-Werte-Screen nutzt weiterhin die kleinere 48-px-Schrift und wird
+// in Build 63 nochmals um 3 px nach oben feinjustiert. In Build 64 bleibt
+// der 3-Werte-Screen unveraendert. Beim 2-Werte-Screen bleiben Schriftgroesse
+// und vertikale Lage erhalten; beide vollstaendigen Zeilen wandern nochmals
+// 5 px nach links. Beide Zahlenansichten verwenden weiterhin denselben
+// grossen Rahmen wie die Chartansichten.
+static void mainDashboardConfigureValueTextBox(bool threeValues)
 {
-    return mainScreenLayoutGet() == MAIN_SCREEN_LAYOUT_3VALUES;
+    if (threeValues)
+    {
+        // Drei Zeilen innerhalb des grossen Rahmens: x=272 und
+        // y = 85 / 169 / 253. Der Zeilenabstand bleibt mit 84 px
+        // unveraendert luftig und wirkt nicht gequetscht.
+        VirtLCDGrossanzeige.init(16, 3, 272, 85,
+                                 DroidSansMono_48, WHITE, BLACK);
+    }
+    else
+    {
+        // Zwei Zeilen, weiterhin DroidSansMono 60. Je Zeile werden exakt
+        // zehn Zeichen benoetigt (Wertfeld plus Einheit). Schriftgroesse und
+        // vertikale Lage bleiben unveraendert; in Build 64 wandert x nochmals
+        // 5 px nach links.
+        VirtLCDGrossanzeige.init(10, 2, 242, 110,
+                                 DroidSansMono_60, WHITE, BLACK);
+    }
+
+    VirtLCDGrossanzeige.clear();
+    VirtLCDGrossanzeige.invalidate();
+}
+
+static bool mainMeasurementLabelsDrawn = false;
+static uint8_t mainMeasurementLabelsLayout = 0xFF;
+static uint8_t mainMeasurementLabelsLanguage = 0xFF;
+
+static void resetMainMeasurementLabelsCache()
+{
+    mainMeasurementLabelsDrawn = false;
+    mainMeasurementLabelsLayout = 0xFF;
+    mainMeasurementLabelsLanguage = 0xFF;
+}
+
+static void mainMeasurementLabelText(uint8_t row, char* out, size_t outSize)
+{
+    if (out == nullptr || outSize == 0) return;
+
+    const char* src = "";
+    if (row == 0)
+    {
+        src = (ui_language == LANG_EN) ? "Rel. humidity" : "Rel. Feuchte";
+    }
+    else if (row == 1)
+    {
+        src = T(TXT_MAIN_CHART_DEW_POINT);
+    }
+    else
+    {
+        src = (ui_language == LANG_EN) ? "T-Ambient" : "T-Umgebung";
+    }
+
+    strncpy(out, src, outSize - 1);
+    out[outSize - 1] = '\0';
+
+    // Vorhandene Sprachtexte wie "T-Umgebung:" ohne doppelten Doppelpunkt.
+    size_t len = strlen(out);
+    while (len > 0 && (out[len - 1] == ':' || out[len - 1] == ' '))
+    {
+        out[--len] = '\0';
+    }
+}
+
+static void drawMainMeasurementLabelRow(const char* text,
+                                        int16_t colonX, int16_t y)
+{
+    if (text == nullptr) text = "";
+
+    const int16_t labelW = (int16_t)strlen(text) * 13;
+    const int16_t gap = 4;
+
+    tft.setCursor(colonX - gap - labelW, y);
+    tpTftPrintUtf8(text);
+    tft.setCursor(colonX, y);
+    tft.print(":");
+}
+
+static void drawMainMeasurementLabels(bool threeValues, bool forceRedraw)
+{
+    const uint8_t layout = threeValues ? 1U : 0U;
+    const uint8_t language = (uint8_t)ui_language;
+
+    if (!forceRedraw && mainMeasurementLabelsDrawn &&
+        mainMeasurementLabelsLayout == layout &&
+        mainMeasurementLabelsLanguage == language)
+    {
+        return;
+    }
+
+    tft.setFont(DroidSansMono_16);
+    tft.setTextColor(WHITE, BLACK);
+
+    char label[24];
+    if (threeValues)
+    {
+        // Inline neben den 48-px-Werten. Der komplette Block liegt gegenueber
+        // Build 62 nochmals 3 px hoeher. Alle Doppelpunkte stehen weiterhin
+        // exakt auf einer Vertikalen bei x=252.
+        const int16_t ys[3] = {117, 201, 285};
+        for (uint8_t row = 0; row < 3; row++)
+        {
+            // Die gesamte alte und neue Labelspalte loeschen; der Wert beginnt
+            // erst bei x=272.
+            tft.fillRect(45, ys[row] - 2, 222, 22, BLACK);
+            mainMeasurementLabelText(row, label, sizeof(label));
+            drawMainMeasurementLabelRow(label, 252, ys[row]);
+        }
+    }
+    else
+    {
+        // Im gemeinsamen grossen Rahmen stehen die Beschriftungen inline
+        // links neben den unveraendert 60 px grossen Hauptwerten. Gegenueber
+        // Build 63 wird der komplette Zeilenblock nochmals 5 px nach links
+        // verschoben. Die Doppelpunkte liegen jetzt bei x=222.
+        const int16_t ys[2] = {142, 247};
+        for (uint8_t row = 0; row < 2; row++)
+        {
+            // Nur die linke Labelspalte loeschen; der Wert beginnt bei x=242.
+            tft.fillRect(12, ys[row] - 2, 225, 22, BLACK);
+            mainMeasurementLabelText(row, label, sizeof(label));
+            drawMainMeasurementLabelRow(label, 222, ys[row]);
+        }
+    }
+
+    mainMeasurementLabelsDrawn = true;
+    mainMeasurementLabelsLayout = layout;
+    mainMeasurementLabelsLanguage = language;
 }
 
 static const uint16_t MAIN_CHART_HISTORY_POINTS = 1440;
@@ -675,11 +807,8 @@ bool mainDisplayFrameHit(uint16_t x, uint16_t y)
         return false;
     }
 
-    if (mainDashboardView == MAIN_DASH_VALUES && !mainDashboardAltValuesLayout())
-    {
-        return (x >= 115 && x < 685 && y >= 88 && y < 298);
-    }
-
+    // Zahlen-, 3-Werte- und Chartansichten verwenden denselben grossen
+    // Rahmen und damit auch dieselbe Touchflaeche.
     return (x >= MAIN_CHART_FRAME_X &&
             x < (MAIN_CHART_FRAME_X + MAIN_CHART_FRAME_W) &&
             y >= MAIN_CHART_FRAME_Y &&
@@ -1386,6 +1515,7 @@ static void resetFlowStatusFieldCache();
 static void resetMeasurementStatusCache();
 static void resetFanMiniStatusCache();
 static void resetMainChartDisplayCache();
+static void resetMainMeasurementLabelsCache();
 
 void eraseDisplay(void)
 {
@@ -1423,6 +1553,7 @@ void eraseDisplay(void)
     resetMeasurementStatusCache();
     resetFanMiniStatusCache();
     resetMainChartDisplayCache();
+    resetMainMeasurementLabelsCache();
     alarmResetDisplayCache();
 
     TFTWAIT();
@@ -1779,15 +1910,14 @@ static const char* messwertStatusText()
 
 static void drawMeasurementStatusFrame(uint16_t color, bool forceRedraw)
 {
-    // In der Standard-Zahlenansicht bleibt der bekannte Rahmen erhalten.
-    // Fuer Verlaufansichten und den alternativen 3-Werte-Hauptscreen wird
-    // der gleiche grosse Rahmen wie beim Chart verwendet.
-    const bool wideFrame = (mainDashboardView != MAIN_DASH_VALUES) || mainDashboardAltValuesLayout();
-    const int16_t x = wideFrame ? MAIN_CHART_FRAME_X : 115;
-    const int16_t y = wideFrame ? MAIN_CHART_FRAME_Y : 88;
-    const int16_t w = wideFrame ? MAIN_CHART_FRAME_W : 570;
-    const int16_t h = wideFrame ? MAIN_CHART_FRAME_H : 210;
-    const int16_t r = wideFrame ? MAIN_CHART_FRAME_R : 8;
+    // Alle Hauptansichten nutzen exakt denselben grossen Rahmen. Dadurch
+    // bleibt die Geometrie beim Umschalten zwischen 2 Werten, 3 Werten und
+    // Verlauf ruhig und konsistent.
+    const int16_t x = MAIN_CHART_FRAME_X;
+    const int16_t y = MAIN_CHART_FRAME_Y;
+    const int16_t w = MAIN_CHART_FRAME_W;
+    const int16_t h = MAIN_CHART_FRAME_H;
+    const int16_t r = MAIN_CHART_FRAME_R;
 
     if (!forceRedraw && messwertFrameColorCache == color)
     {
@@ -2493,6 +2623,9 @@ void lcd_display_klima_screen()
     if (mainDashboardLastLayout != currentLayout)
     {
         mainDashboardLastLayout = currentLayout;
+        mainDashboardConfigureValueTextBox(
+            currentLayout == MAIN_SCREEN_LAYOUT_3VALUES);
+        resetMainMeasurementLabelsCache();
         tft.fillRect(MAIN_CHART_FRAME_X,
                      MAIN_CHART_FRAME_Y,
                      MAIN_CHART_FRAME_W,
@@ -2519,7 +2652,6 @@ void lcd_display_klima_screen()
 
     displayFormatValueOrDashes(strBuf, sizeof(strBuf), relativeFeuchte, 6, 2);
 
-    VirtLCDGrossanzeige.print(" ");
     VirtLCDGrossanzeige.print(strBuf);
     VirtLCDGrossanzeige.print(" \xB5""rH");
 
@@ -2527,7 +2659,6 @@ void lcd_display_klima_screen()
 
     displayFormatValueOrDashes(strBuf, sizeof(strBuf), präziserTaupunkt, 7, 3);
 
-    VirtLCDGrossanzeige.print(" ");
     VirtLCDGrossanzeige.print(strBuf);
     VirtLCDGrossanzeige.print(" \xB0""C");
 
@@ -2537,7 +2668,6 @@ void lcd_display_klima_screen()
 
         displayFormatValueOrDashes(strBuf, sizeof(strBuf), tempUmgebung, 7, 3);
 
-        VirtLCDGrossanzeige.print(" ");
         VirtLCDGrossanzeige.print(strBuf);
         VirtLCDGrossanzeige.print(" \xB0""C");
     }
@@ -2638,6 +2768,7 @@ void lcd_display_klima_screen()
     // damit die TextBox ihn nicht wieder ueberschreibt.
     zeichnePeltierRichtungsPunkt();
     zeichneFanMiniStatus();
+    drawMainMeasurementLabels(altValuesLayout, false);
     zeichneMesswertStatus();
     zeichneSystemMiniStatus();
     zeichneEthernetMiniStatus();

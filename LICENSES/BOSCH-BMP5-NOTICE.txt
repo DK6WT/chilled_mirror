@@ -1,0 +1,11 @@
+Bosch BMP5 Sensor API
+=====================
+
+Copyright (c) 2021 Bosch Sensortec GmbH. All rights reserved.
+
+The Bosch BMP5 API is bundled below:
+
+libraries/SparkFun_BMP581_Arduino_Library/src/bmp5_api/
+
+License: BSD-3-Clause
+Full text: the component-local LICENSE file and LICENSES/BSD-3-Clause.txt

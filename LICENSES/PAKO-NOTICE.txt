@@ -1,0 +1,47 @@
+pako 1.0.11
+============
+
+Project: https://github.com/nodeca/pako
+Distributed component: dist/pako_deflate.min.js, embedded as the
+`ethPakoDeflateLibrary` PROGMEM string in TPethernet.ino.
+
+pako JavaScript wrapper
+-----------------------
+
+MIT License
+
+Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Ported zlib core
+----------------
+
+The pako 1.0.11 project identifies code under lib/zlib as derived from zlib and
+licensed under the zlib license. The complete zlib text is included in
+LICENSES/Zlib.txt.
+
+Upstream zlib copyright notices include:
+
+Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler
+Copyright (C) 1998-2010 Gilles Vollant
+Copyright (C) 2009-2016 Mark Adler
+
+No TP-3000-specific substantive changes were made to the embedded minified
+pako distribution; it is stored as a C++ raw string for browser delivery.
